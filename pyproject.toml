@@ -1,7 +1,13 @@
 [project]
 name = "advancedcypersecurity"
 version = "0.1.0"
-description = "Add your description here"
+description = "Web resource classifier — crawls URLs, classifies third-party domains by industry, outputs CSV statistics"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "playwright>=1.40",
+    "anthropic>=0.25",
+    "pandas>=2.0",
+    "matplotlib>=3.8",
+    "tqdm>=4.0",
+]

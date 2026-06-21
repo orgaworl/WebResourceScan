@@ -1,0 +1,7 @@
+data/*.csv
+data/*.json
+data/charts/
+data/test_charts/
+__pycache__/
+.pytest_cache/
+*.pyc

@@ -12,7 +12,10 @@ from .analysis.categories import build_site_category_map, get_site_category
 
 import pandas as pd
 
-CAT_COLS = ["cat_gambling", "cat_gaming", "cat_ad", "cat_payment", "cat_cdn", "cat_other"]
+CAT_COLS = ["cat_gambling", "cat_gaming", "cat_ad", "cat_analytics",
+            "cat_social", "cat_payment", "cat_cdn", "cat_other"]
+QUALITY_COLS = ["https_resources", "error_resources", "iframe_resources",
+                "first_party_resources", "unique_domains"]
 
 
 def _aggregate(raw_dir: str, output: str) -> None:
@@ -86,7 +89,8 @@ def _clean(input_csv: str, output_csv: str, urls_file: str) -> None:
     df = df[df["status"] == "ok"].copy()
     dropped = total - len(df)
 
-    numeric_cols = [c for c in df.columns if c.startswith("res_") or c.startswith("cat_") or c == "total_resources"]
+    numeric_cols = [c for c in df.columns if c.startswith("res_") or c.startswith("cat_")
+                    or c in ("total_resources",) + tuple(QUALITY_COLS)]
     df[numeric_cols] = df[numeric_cols].fillna(0).astype(int)
     df["third_party_domains"] = df["third_party_domains"].fillna("")
 
@@ -104,6 +108,19 @@ def _clean(input_csv: str, output_csv: str, urls_file: str) -> None:
     df["tp_domain_count"] = df["third_party_domains"].apply(
         lambda s: len([x for x in s.split(",") if x.strip()]) if s else 0
     )
+    if "https_resources" in df.columns:
+        df["https_ratio"]    = (df["https_resources"] / total_res).fillna(0).round(4)
+    if "error_resources" in df.columns:
+        df["error_ratio"]    = (df["error_resources"] / total_res).fillna(0).round(4)
+    if "iframe_resources" in df.columns:
+        df["iframe_ratio"]   = (df["iframe_resources"] / total_res).fillna(0).round(4)
+    if "first_party_resources" in df.columns:
+        df["self_hosted_ratio"] = (df["first_party_resources"] / total_res).fillna(0).round(4)
+    privacy_cols = [c for c in ["cat_ad", "cat_analytics", "cat_social"] if c in df.columns]
+    if privacy_cols:
+        df["privacy_score"]  = (df[privacy_cols].sum(axis=1) / total_res).fillna(0).round(4)
+    if "unique_domains" in df.columns:
+        df["domain_diversity"] = (df["unique_domains"] / total_res.fillna(1)).fillna(0).round(4)
 
     df.to_csv(output_csv, index=False)
     print(f"Kept {len(df)} rows, dropped {dropped} rows (status != ok or duplicate)")

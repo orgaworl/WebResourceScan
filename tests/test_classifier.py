@@ -30,3 +30,14 @@ def test_unknown_domain_returns_other():
 
 def test_valid_categories_set():
     assert VALID_CATEGORIES == {"gambling", "gaming", "ad", "payment", "cdn", "other"}
+
+
+def test_classifier_uses_shared_cache():
+    from multiprocessing import Manager
+    from src.classifier import DomainClassifier
+
+    with Manager() as m:
+        shared = m.dict()
+        clf = DomainClassifier(shared_cache=shared)
+        clf.classify(["bet365.com"])
+        assert shared["bet365.com"] == "gambling"

@@ -18,12 +18,14 @@ CATEGORY_COLORS: dict[str, str] = {
 }
 
 DOMAIN_CAT_COLORS: dict[str, str] = {
-    "ad":       "#e63946",
-    "cdn":      "#457b9d",
-    "payment":  "#2a9d8f",
-    "gambling": "#f4a261",
-    "gaming":   "#1d3557",
-    "other":    "#aaaaaa",
+    "ad":        "#e63946",
+    "analytics": "#ff9f1c",
+    "social":    "#a8dadc",
+    "cdn":       "#457b9d",
+    "payment":   "#2a9d8f",
+    "gambling":  "#f4a261",
+    "gaming":    "#1d3557",
+    "other":     "#aaaaaa",
 }
 
 RES_COLORS: list[str] = [

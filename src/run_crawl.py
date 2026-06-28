@@ -1,7 +1,7 @@
 import argparse
 import csv
 import os
-from multiprocessing import Pool
+from multiprocessing import Manager, Pool
 from urllib.parse import urlparse
 
 from tqdm import tqdm
@@ -9,7 +9,7 @@ from tqdm import tqdm
 from . import config
 from .classifier import DomainClassifier
 from .crawler import crawl_site
-from .raw_io import _etld1, raw_path, read_raw, write_raw
+from .raw_io import _etld1, _slug, raw_path, read_raw, write_raw
 from .reporter import CSV_COLUMNS, build_row
 
 
@@ -23,8 +23,14 @@ def _load_done_urls(output_path: str) -> set[str]:
 
 def _worker(args: tuple) -> dict:
     """Runs in a subprocess: crawl one site, classify domains, write raw files, return summary row."""
-    url, raw_dir, max_pages, depth, stealth = args
-    crawl_result = crawl_site(url, max_pages=max_pages, depth=depth, stealth=stealth)
+    url, raw_dir, max_pages, depth, stealth, shared_cache, page_workers, timeout_ms, fast_timeout_ms, idle_timeout_ms = args
+    checkpoint_dir = os.path.join(raw_dir, f"{_slug(url)}__ckpt")
+    crawl_result = crawl_site(
+        url, max_pages=max_pages, depth=depth, stealth=stealth,
+        checkpoint_dir=checkpoint_dir, page_workers=page_workers,
+        timeout_ms=timeout_ms, fast_timeout_ms=fast_timeout_ms,
+        idle_timeout_ms=idle_timeout_ms,
+    )
     source_etld1 = _etld1(urlparse(url).netloc)
 
     third_party_domains = list({
@@ -32,13 +38,13 @@ def _worker(args: tuple) -> dict:
         if r["domain"] and _etld1(r["domain"]) != source_etld1
     })
 
-    classifier = DomainClassifier()
+    classifier = DomainClassifier(shared_cache=shared_cache)
     if third_party_domains:
         classifier.classify(third_party_domains)
 
     write_raw(crawl_result, classifier.cache, source_etld1, raw_dir)
 
-    meta_file = raw_path(url, raw_dir).replace(".csv", ".meta")
+    meta_file = os.path.join(raw_dir, f"{_slug(url)}.meta")
     with open(meta_file, "w") as mf:
         mf.write(f"url={url}\nstatus={crawl_result['status']}\n")
 
@@ -51,9 +57,22 @@ def main():
     parser.add_argument("--input", default=config.INPUT_FILE, help="Path to URL list file. Env: INPUT_FILE")
     parser.add_argument("--output", default="data/results.csv", help="Output summary CSV path")
     parser.add_argument("--raw-dir", default="data/raw", help="Directory for per-site raw resource CSVs")
-    parser.add_argument("--workers", type=int, default=4, help="Number of parallel crawler processes")
+    parser.add_argument(
+        "--workers", type=int, default=None,
+        help="Parallel crawler processes (default: min(cpu_count, sites, 8))"
+    )
+    parser.add_argument(
+        "--page-workers", type=int, default=1,
+        help="Parallel pages per site (1=serial, max capped at 3)"
+    )
     parser.add_argument("--max-pages", type=int, default=20, help="Max pages to crawl per site")
     parser.add_argument("--depth", type=int, default=2, help="BFS link-follow depth (0=entry page only)")
+    parser.add_argument("--timeout", type=int, default=5_000,
+                        help="Full page load timeout in ms (default: 5000)")
+    parser.add_argument("--fast-timeout", type=int, default=5_000,
+                        help="Fast-path timeout for first load attempt in ms (default: 5000)")
+    parser.add_argument("--idle-timeout", type=int, default=5_000,
+                        help="Post-scroll networkidle wait timeout in ms (default: 5000)")
     parser.add_argument("--no-stealth", action="store_true", help="Disable anti-bot evasion (faster, less stealthy)")
     args = parser.parse_args()
 
@@ -67,26 +86,37 @@ def main():
         print("All URLs already processed.")
         return
 
+    if args.workers is None:
+        args.workers = min(os.cpu_count() or 4, len(pending), 8)
+    if args.workers < 1:
+        args.workers = 1
+
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     os.makedirs(args.raw_dir, exist_ok=True)
     write_header = not os.path.exists(args.output)
 
-    tasks = [(url, args.raw_dir, args.max_pages, args.depth, not args.no_stealth) for url in pending]
+    with Manager() as manager:
+        shared_cache = manager.dict()
+        tasks = [
+            (url, args.raw_dir, args.max_pages, args.depth, not args.no_stealth, shared_cache,
+             args.page_workers, args.timeout, args.fast_timeout, args.idle_timeout)
+            for url in pending
+        ]
 
-    with open(args.output, "a", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=CSV_COLUMNS)
-        if write_header:
-            writer.writeheader()
+        with open(args.output, "a", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=CSV_COLUMNS)
+            if write_header:
+                writer.writeheader()
 
-        with Pool(processes=args.workers) as pool:
-            for row in tqdm(
-                pool.imap_unordered(_worker, tasks),
-                total=len(tasks),
-                desc="Crawling",
-                unit="site",
-            ):
-                writer.writerow(row)
-                csvfile.flush()
+            with Pool(processes=args.workers) as pool:
+                for row in tqdm(
+                    pool.imap_unordered(_worker, tasks),
+                    total=len(tasks),
+                    desc="Crawling",
+                    unit="site",
+                ):
+                    writer.writerow(row)
+                    csvfile.flush()
 
 
 if __name__ == "__main__":

@@ -7,19 +7,28 @@ Matching order:
 3. Keyword scan against the full domain string
 4. Fallback: "other"
 
-To extend coverage add entries to KNOWN_DOMAINS or KEYWORDS below.
+Categories:
+  gambling  — betting / casino infrastructure
+  gaming    — game engines, platforms, CDN
+  ad        — advertising networks, real-time bidding
+  analytics — analytics, A/B testing, heatmaps (distinct from ad)
+  social    — social network SDKs and embeds
+  payment   — payment gateways, crypto exchanges
+  cdn       — content delivery, cloud storage, general infrastructure
+  other     — unrecognised
 """
 
-VALID_CATEGORIES = {"gambling", "gaming", "ad", "payment", "cdn", "other"}
+VALID_CATEGORIES = {"gambling", "gaming", "ad", "analytics", "social", "payment", "cdn", "other"}
 
 KNOWN_DOMAINS: dict[str, str] = {
-    # --- gambling ---
+    # ── gambling ─────────────────────────────────────────────────────────────
     "bet365.com": "gambling",
     "betway.com": "gambling",
     "draftkings.com": "gambling",
     "fanduel.com": "gambling",
     "pokerstars.com": "gambling",
     "888casino.com": "gambling",
+    "888holdings.com": "gambling",
     "williamhill.com": "gambling",
     "ladbrokes.com": "gambling",
     "betfair.com": "gambling",
@@ -34,7 +43,16 @@ KNOWN_DOMAINS: dict[str, str] = {
     "22bet.com": "gambling",
     "melbet.com": "gambling",
     "betsson.com": "gambling",
-    # --- gaming ---
+    "coral.co.uk": "gambling",
+    "paddypower.com": "gambling",
+    "skybet.com": "gambling",
+    "pointsbet.com": "gambling",
+    "superbet.com": "gambling",
+    "marathonbet.com": "gambling",
+    "betmgm.com": "gambling",
+    "caesarssportsbook.com": "gambling",
+    "sportsbettingdime.com": "gambling",
+    # ── gaming ────────────────────────────────────────────────────────────────
     "unity3d.com": "gaming",
     "unity.com": "gaming",
     "steampowered.com": "gaming",
@@ -51,7 +69,21 @@ KNOWN_DOMAINS: dict[str, str] = {
     "playtika.com": "gaming",
     "agora.io": "gaming",
     "photonengine.com": "gaming",
-    # --- ad / tracking ---
+    "nexon.com": "gaming",
+    "ncsoft.com": "gaming",
+    "riot.com": "gaming",
+    "riotgames.com": "gaming",
+    "leagueoflegends.com": "gaming",
+    "valvesoftware.com": "gaming",
+    "activision.com": "gaming",
+    "nintendo.com": "gaming",
+    "xbox.com": "gaming",
+    "playstation.com": "gaming",
+    "gog.com": "gaming",
+    "itch.io": "gaming",
+    "playfab.com": "gaming",
+    "gameliftstreaming.com": "gaming",
+    # ── ad / real-time-bidding ────────────────────────────────────────────────
     "doubleclick.net": "ad",
     "googletagmanager.com": "ad",
     "googlesyndication.com": "ad",
@@ -67,23 +99,91 @@ KNOWN_DOMAINS: dict[str, str] = {
     "quantserve.com": "ad",
     "moatads.com": "ad",
     "amazon-adsystem.com": "ad",
+    "advertising.com": "ad",
+    "media.net": "ad",
+    "indexexchange.com": "ad",
+    "appnexus.com": "ad",
+    "smartadserver.com": "ad",
+    "sovrn.com": "ad",
+    "33across.com": "ad",
+    "liveintent.com": "ad",
+    "teads.tv": "ad",
+    "tripadvisor.com": "ad",
+    "sharethrough.com": "ad",
+    "adroll.com": "ad",
+    "zemanta.com": "ad",
+    "bidswitch.net": "ad",
+    "triplelift.com": "ad",
+    "yieldmo.com": "ad",
+    "spotxchange.com": "ad",
     "bing.com": "ad",
     "yahoo.com": "ad",
     "yandex.ru": "ad",
+    "yandex.net": "ad",
     "baidu.com": "ad",
-    "hotjar.com": "ad",
-    "segment.com": "ad",
-    "mixpanel.com": "ad",
-    "amplitude.com": "ad",
-    "newrelic.com": "ad",
-    "clarity.ms": "ad",
-    "facebook.net": "ad",
-    "facebook.com": "ad",
-    "connect.facebook.net": "ad",
-    "twitter.com": "ad",
-    "analytics.google.com": "ad",
-    "google-analytics.com": "ad",
-    # --- payment ---
+    # ── analytics / measurement ───────────────────────────────────────────────
+    "google-analytics.com": "analytics",
+    "analytics.google.com": "analytics",
+    "hotjar.com": "analytics",
+    "segment.com": "analytics",
+    "mixpanel.com": "analytics",
+    "amplitude.com": "analytics",
+    "newrelic.com": "analytics",
+    "clarity.ms": "analytics",
+    "fullstory.com": "analytics",
+    "heap.io": "analytics",
+    "mouseflow.com": "analytics",
+    "logrocket.com": "analytics",
+    "contentsquare.com": "analytics",
+    "dynatrace.com": "analytics",
+    "pingdom.com": "analytics",
+    "datadog-browser-agent.com": "analytics",
+    "datadoghq.com": "analytics",
+    "sentry.io": "analytics",
+    "bugsnag.com": "analytics",
+    "rollbar.com": "analytics",
+    "optimizely.com": "analytics",
+    "abtasty.com": "analytics",
+    "vwo.com": "analytics",
+    "crazyegg.com": "analytics",
+    "chartbeat.com": "analytics",
+    "parsely.com": "analytics",
+    "intercom.io": "analytics",
+    "pendo.io": "analytics",
+    "appsflyer.com": "analytics",
+    "adjust.com": "analytics",
+    "branch.io": "analytics",
+    "onesignal.com": "analytics",
+    # ── social ────────────────────────────────────────────────────────────────
+    "facebook.net": "social",
+    "facebook.com": "social",
+    "connect.facebook.net": "social",
+    "fbcdn.net": "social",
+    "instagram.com": "social",
+    "twitter.com": "social",
+    "twimg.com": "social",
+    "t.co": "social",
+    "linkedin.com": "social",
+    "licdn.com": "social",
+    "pinterest.com": "social",
+    "pinimg.com": "social",
+    "tiktok.com": "social",
+    "tiktokcdn.com": "social",
+    "snapchat.com": "social",
+    "sc-cdn.net": "social",
+    "reddit.com": "social",
+    "redd.it": "social",
+    "redditmedia.com": "social",
+    "redditstatic.com": "social",
+    "whatsapp.net": "social",
+    "whatsapp.com": "social",
+    "telegram.org": "social",
+    "discord.com": "social",
+    "discordapp.com": "social",
+    "youtube.com": "social",
+    "ytimg.com": "social",
+    "googlevideo.com": "social",
+    # ── payment ───────────────────────────────────────────────────────────────
     "stripe.com": "payment",
     "paypal.com": "payment",
     "braintreegateway.com": "payment",
@@ -103,13 +203,23 @@ KNOWN_DOMAINS: dict[str, str] = {
     "razorpay.com": "payment",
     "alipay.com": "payment",
     "wechat.com": "payment",
-    # --- cdn / infrastructure ---
+    "revolut.com": "payment",
+    "trustly.com": "payment",
+    "paysafecard.com": "payment",
+    "worldpay.com": "payment",
+    "cybersource.com": "payment",
+    "2checkout.com": "payment",
+    "mollie.com": "payment",
+    "paysafe.com": "payment",
+    # ── cdn / infrastructure ──────────────────────────────────────────────────
     "cloudflare.com": "cdn",
     "cloudflare.net": "cdn",
     "cloudfront.net": "cdn",
     "fastly.net": "cdn",
+    "fastlylb.net": "cdn",
     "akamaihd.net": "cdn",
     "akamai.net": "cdn",
+    "akamaized.net": "cdn",
     "edgesuite.net": "cdn",
     "edgekey.net": "cdn",
     "jsdelivr.net": "cdn",
@@ -127,11 +237,23 @@ KNOWN_DOMAINS: dict[str, str] = {
     "stackpathcdn.com": "cdn",
     "b-cdn.net": "cdn",
     "bunnycdn.com": "cdn",
-    "twimg.com": "cdn",
-    "fbcdn.net": "cdn",
-    "instagram.com": "cdn",
     "wp.com": "cdn",
     "wordpress.com": "cdn",
+    "wp-rocket.me": "cdn",
+    "imperva.com": "cdn",
+    "incapdns.net": "cdn",
+    "sucuri.net": "cdn",
+    "edgecastcdn.net": "cdn",
+    "llnwd.net": "cdn",
+    "hwcdn.net": "cdn",
+    "limelight.com": "cdn",
+    "level3.net": "cdn",
+    "vo.msecnd.net": "cdn",
+    "cdn77.com": "cdn",
+    "cdn77.org": "cdn",
+    "digitaloceanspaces.com": "cdn",
+    "storage.googleapis.com": "cdn",
+    "r2.dev": "cdn",
 }
 
 KEYWORDS: dict[str, list[str]] = {
@@ -141,21 +263,31 @@ KEYWORDS: dict[str, list[str]] = {
         "jackpot", "roulette", "blackjack", "sportbet", "888",
     ],
     "gaming": [
-        "game", "games", "gaming", "esport", "steam", "play", "gamer",
-        "rpg", "mmo", "fps", "guild", "clan", "quest", "level",
+        "game", "games", "gaming", "esport", "steam", "gamer",
+        "rpg", "mmo", "fps", "guild", "clan", "quest",
     ],
     "ad": [
-        "ads", "advert", "analytics", "tracker", "tracking", "pixel",
-        "beacon", "metric", "stat", "measure", "tag", "click", "impression",
-        "audience", "retarget", "dsp", "ssp", "rtb",
+        "advert", "adserv", "adtech", "adexchange", "adnetwork",
+        "rtb", "dsp", "ssp", "bidder", "prebid",
+        "retarget", "impression", "adslot", "adsystem",
+    ],
+    "analytics": [
+        "analytics", "tracker", "tracking", "pixel", "beacon",
+        "metric", "stat", "measure", "tag", "telemetry",
+        "heatmap", "session", "replay", "monitor", "apm",
+        "audience", "insight", "intelligence",
+    ],
+    "social": [
+        "social", "share", "tweet", "like", "comment", "follow",
+        "login", "oauth", "auth", "connect",
     ],
     "payment": [
         "pay", "payment", "cash", "wallet", "crypto", "coin", "finance",
         "fintech", "bank", "transfer", "checkout", "billing",
     ],
     "cdn": [
-        "cdn", "static", "assets", "media", "cache", "edge", "deliver",
-        "content", "storage", "bucket", "blob",
+        "cdn", "static", "assets", "cache", "edge", "deliver",
+        "storage", "bucket", "blob", "origin", "s3", "gcs",
     ],
 }
 
@@ -169,16 +301,13 @@ def classify_domain(domain: str) -> str:
     if not domain:
         return "other"
 
-    # exact match
     if domain in KNOWN_DOMAINS:
         return KNOWN_DOMAINS[domain]
 
-    # eTLD+1 match (e.g. "sub.bet365.com" → "bet365.com")
     base = _etld1(domain)
     if base in KNOWN_DOMAINS:
         return KNOWN_DOMAINS[base]
 
-    # keyword scan on full domain string (lowercased, dots/hyphens as separators)
     lower = domain.lower()
     for category, keywords in KEYWORDS.items():
         for kw in keywords:
@@ -189,10 +318,10 @@ def classify_domain(domain: str) -> str:
 
 
 class DomainClassifier:
-    """Thin wrapper kept for interface compatibility with main.py / aggregate.py."""
+    """Thin wrapper for classify_domain with an optional cross-process shared cache."""
 
-    def __init__(self, cache_path: str = "", **_kwargs):
-        self.cache: dict[str, str] = {}
+    def __init__(self, cache_path: str = "", shared_cache=None, **_kwargs):
+        self.cache: dict = shared_cache if shared_cache is not None else {}
 
     def classify(self, domains: list[str]) -> dict[str, str]:
         for d in domains:

@@ -17,9 +17,10 @@ except ImportError:
     def classify_domain(d: str) -> str:  # type: ignore[misc]
         return "other"
 
-CAT_COLS   = ["cat_gambling", "cat_gaming", "cat_ad", "cat_payment", "cat_cdn", "cat_other"]
+CAT_COLS   = ["cat_gambling", "cat_gaming", "cat_ad", "cat_analytics",
+              "cat_social", "cat_payment", "cat_cdn", "cat_other"]
 RES_COLS   = ["res_script", "res_stylesheet", "res_image", "res_media", "res_font", "res_xhr", "res_other"]
-CAT_LABELS = ["博彩", "游戏", "广告/追踪", "支付", "CDN", "其他"]
+CAT_LABELS = ["博彩", "游戏", "广告", "分析/监测", "社交", "支付", "CDN", "其他"]
 RES_LABELS = ["脚本", "样式表", "图片", "媒体", "字体", "XHR", "其他"]
 SITE_CATS  = ["gambling", "gaming", "esports", "crypto", "payment", "ad-tech",
                "social", "news", "ecommerce", "adult", "cdn-infra", "streaming", "reference"]
@@ -134,6 +135,7 @@ def plot_crawl_success_by_industry(df_raw: pd.DataFrame, out_dir: str) -> None:
     patches = [mpatches.Patch(color="#2a9d8f", label="≥ 70%"),
                mpatches.Patch(color="#f4a261", label="40–70%"),
                mpatches.Patch(color="#e63946", label="< 40%")]
+    ax.legend(handles=patches, frameon=False, fontsize=8, loc="lower right", title="成功率区间")
     _save(fig, out_dir, "crawl_success_rate.png")
 
 
@@ -236,8 +238,6 @@ def plot_resource_count_scatter(df: pd.DataFrame, out_dir: str) -> None:
 # ── Domain charts ─────────────────────────────────────────────────────────────
 
 def plot_top_domains_global(df: pd.DataFrame, out_dir: str, n: int = 25) -> None:
-    counter = _explode_domains(df)
-    # site-level presence (not token frequency)
     site_sets = df["third_party_domains"].fillna("").apply(
         lambda s: {x.strip() for x in s.split(",") if x.strip()}
     )
@@ -356,6 +356,87 @@ def plot_domain_ubiquity_histogram(df: pd.DataFrame, out_dir: str) -> None:
     _save(fig, out_dir, "domain_ubiquity_hist.png")
 
 
+# ── New: HTTPS adoption, privacy risk, resource origin ───────────────────────
+
+def plot_https_adoption(df: pd.DataFrame, out_dir: str) -> None:
+    """Horizontal bar showing HTTPS ratio per industry (sorted by ratio)."""
+    if "https_ratio" not in df.columns or "site_category" not in df.columns:
+        return
+    group = df.groupby("site_category")["https_ratio"].mean().sort_values(ascending=True)
+    if group.empty:
+        return
+    colors = ["#2a9d8f" if v >= 0.9 else "#f4a261" if v >= 0.7 else "#e63946"
+              for v in group.values]
+    fig, ax = plt.subplots(figsize=(9, max(4, len(group) * 0.55)))
+    bars = ax.barh(group.index, group.values * 100, color=colors, edgecolor="white", linewidth=0.8)
+    ax.set_xlim(0, 110)
+    ax.set_xlabel("HTTPS 资源占比 (%)")
+    ax.set_title("各行业 HTTPS 资源采用率")
+    for bar, v in zip(bars, group.values):
+        ax.text(v * 100 + 1, bar.get_y() + bar.get_height() / 2,
+                f"{v * 100:.0f}%", va="center", fontsize=8)
+    patches = [mpatches.Patch(color="#2a9d8f", label="≥ 90%"),
+               mpatches.Patch(color="#f4a261", label="70–90%"),
+               mpatches.Patch(color="#e63946", label="< 70%")]
+    ax.legend(handles=patches, frameon=False, fontsize=8, loc="lower right", title="安全等级")
+    _save(fig, out_dir, "https_adoption.png")
+
+
+def plot_privacy_risk(df: pd.DataFrame, out_dir: str) -> None:
+    """Stacked bar: ad + analytics + social fraction per industry."""
+    privacy_cats = [c for c in ["cat_ad", "cat_analytics", "cat_social"] if c in df.columns]
+    privacy_labels = {"cat_ad": "广告", "cat_analytics": "分析/监测", "cat_social": "社交"}
+    if not privacy_cats or "site_category" not in df.columns:
+        return
+    group = df.groupby("site_category")[privacy_cats + ["total_resources"]].mean()
+    total = group["total_resources"].replace(0, float("nan"))
+    pct = group[privacy_cats].div(total, axis=0).fillna(0) * 100
+    if pct.empty:
+        return
+    pct = pct.sort_values(privacy_cats[0], ascending=False)
+    colors_map = {"cat_ad": "#e63946", "cat_analytics": "#ff9f1c", "cat_social": "#a8dadc"}
+    fig, ax = plt.subplots(figsize=(12, max(4, len(pct) * 0.6)))
+    lefts = np.zeros(len(pct))
+    for col in privacy_cats:
+        vals = pct[col].values
+        ax.barh(pct.index, vals, left=lefts,
+                color=colors_map.get(col, "#aaaaaa"),
+                label=privacy_labels.get(col, col),
+                edgecolor="white", linewidth=0.5)
+        for j, (v, l) in enumerate(zip(vals, lefts)):
+            if v > 3:
+                ax.text(l + v / 2, j, f"{v:.1f}%", ha="center", va="center",
+                        fontsize=7, color="white", fontweight="medium")
+        lefts += vals
+    ax.set_xlabel("隐私相关资源占比 (%)")
+    ax.set_title("各行业隐私风险资源构成（广告 + 分析 + 社交）")
+    ax.legend(frameon=False, fontsize=8, loc="lower right", ncol=3)
+    _save(fig, out_dir, "privacy_risk_by_industry.png")
+
+
+def plot_resource_origin(df: pd.DataFrame, out_dir: str) -> None:
+    """Grouped bar: first-party vs third-party resource fraction per industry."""
+    if "self_hosted_ratio" not in df.columns or "site_category" not in df.columns:
+        return
+    group = df.groupby("site_category")[["self_hosted_ratio", "tp_ratio"]].mean()
+    if group.empty:
+        return
+    group = group.sort_values("self_hosted_ratio", ascending=False)
+    x = np.arange(len(group))
+    width = 0.38
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.bar(x - width / 2, group["self_hosted_ratio"] * 100, width,
+           label="第一方（自托管）", color="#457b9d", edgecolor="white", linewidth=0.6)
+    ax.bar(x + width / 2, group["tp_ratio"] * 100, width,
+           label="第三方", color="#e63946", edgecolor="white", linewidth=0.6)
+    ax.set_xticks(x)
+    ax.set_xticklabels(group.index, rotation=30, ha="right")
+    ax.set_ylabel("资源占比 (%)")
+    ax.set_title("各行业资源来源构成（第一方 vs 第三方）")
+    ax.legend(frameon=False, fontsize=9)
+    _save(fig, out_dir, "resource_origin_by_industry.png")
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -378,16 +459,32 @@ def main() -> None:
 
     df = _add_site_category(df, args.urls_file)
 
-    numeric_cols = [c for c in df.columns if c.startswith("res_") or c.startswith("cat_") or c == "total_resources"]
+    numeric_cols = [c for c in df.columns if c.startswith("res_") or c.startswith("cat_")
+                    or c in ("total_resources", "https_resources", "error_resources",
+                              "iframe_resources", "first_party_resources", "unique_domains")]
     df[numeric_cols] = df[numeric_cols].fillna(0)
     df["third_party_domains"] = df["third_party_domains"].fillna("")
     if "script_ratio" not in df.columns:
         total = df["total_resources"].replace(0, float("nan"))
         df["script_ratio"] = ((df["res_script"] + df["res_xhr"]) / total).fillna(0)
+    if "tp_ratio" not in df.columns:
+        total = df["total_resources"].replace(0, float("nan"))
+        df["tp_ratio"] = (df[[c for c in CAT_COLS if c in df.columns]].sum(axis=1) / total).fillna(0)
     if "tp_domain_count" not in df.columns:
         df["tp_domain_count"] = df["third_party_domains"].apply(
             lambda s: len([x for x in s.split(",") if x.strip()])
         )
+    if "https_ratio" not in df.columns and "https_resources" in df.columns:
+        total = df["total_resources"].replace(0, float("nan"))
+        df["https_ratio"] = (df["https_resources"] / total).fillna(0)
+    if "self_hosted_ratio" not in df.columns and "first_party_resources" in df.columns:
+        total = df["total_resources"].replace(0, float("nan"))
+        df["self_hosted_ratio"] = (df["first_party_resources"] / total).fillna(0)
+    if "privacy_score" not in df.columns:
+        privacy_cols = [c for c in ["cat_ad", "cat_analytics", "cat_social"] if c in df.columns]
+        if privacy_cols:
+            total = df["total_resources"].replace(0, float("nan"))
+            df["privacy_score"] = (df[privacy_cols].sum(axis=1) / total).fillna(0)
 
     # Overview
     plot_resource_category_donut(df, args.output_dir)
@@ -409,6 +506,11 @@ def main() -> None:
     plot_domain_presence_heatmap(df, args.output_dir)
     plot_tp_count_vs_resources_bubble(df, args.output_dir)
     plot_domain_ubiquity_histogram(df, args.output_dir)
+
+    # Security & composition
+    plot_https_adoption(df, args.output_dir)
+    plot_privacy_risk(df, args.output_dir)
+    plot_resource_origin(df, args.output_dir)
 
 
 if __name__ == "__main__":

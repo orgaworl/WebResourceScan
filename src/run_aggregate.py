@@ -1,6 +1,8 @@
 import argparse
 import csv
 import glob
+import gzip
+import io
 import os
 
 from .classifier import DomainClassifier
@@ -14,7 +16,10 @@ def main():
     parser.add_argument("--output", default="data/results.csv", help="Output summary CSV path")
     args = parser.parse_args()
 
-    raw_files = sorted(glob.glob(os.path.join(args.raw_dir, "*.csv")))
+    raw_files = sorted(
+        glob.glob(os.path.join(args.raw_dir, "*.csv.gz")) +
+        glob.glob(os.path.join(args.raw_dir, "*.csv"))
+    )
     if not raw_files:
         print(f"No raw CSV files found in {args.raw_dir}")
         return
@@ -28,7 +33,12 @@ def main():
         writer.writeheader()
 
         for raw_file in raw_files:
-            meta_file = raw_file.replace(".csv", ".meta")
+            stem = raw_file
+            for ext in (".csv.gz", ".csv"):
+                if stem.endswith(ext):
+                    stem = stem[: -len(ext)]
+                    break
+            meta_file = stem + ".meta"
             if not os.path.exists(meta_file):
                 print(f"Skipping {raw_file} (no .meta file)")
                 continue
@@ -51,10 +61,16 @@ def main():
                 for r in rows:
                     if r.get("is_third_party", "").lower() == "true":
                         r["domain_category"] = classifier.cache.get(r["domain"], "other")
-                with open(raw_file, "w", newline="") as f:
-                    w = csv.DictWriter(f, fieldnames=RAW_COLUMNS)
-                    w.writeheader()
-                    w.writerows(rows)
+                buf = io.StringIO()
+                w = csv.DictWriter(buf, fieldnames=RAW_COLUMNS)
+                w.writeheader()
+                w.writerows(rows)
+                if raw_file.endswith(".gz"):
+                    with gzip.open(raw_file, "wt", encoding="utf-8", newline="") as gf:
+                        gf.write(buf.getvalue())
+                else:
+                    with open(raw_file, "w", newline="") as f:
+                        f.write(buf.getvalue())
 
             writer.writerow(build_row(source_url, status, rows))
             written += 1

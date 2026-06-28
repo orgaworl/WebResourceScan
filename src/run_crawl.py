@@ -21,6 +21,17 @@ def _load_done_urls(output_path: str) -> set[str]:
         return {row["url"] for row in reader}
 
 
+def _load_retry_urls(output_path: str, retry_statuses: set[str]) -> set[str]:
+    """Return URLs whose last recorded status is in retry_statuses."""
+    if not os.path.exists(output_path):
+        return set()
+    seen: dict[str, str] = {}
+    with open(output_path, newline="") as f:
+        for row in csv.DictReader(f):
+            seen[row["url"]] = row.get("status", "")
+    return {url for url, status in seen.items() if status in retry_statuses}
+
+
 def _worker(args: tuple) -> dict:
     """Runs in a subprocess: crawl one site, classify domains, write raw files, return summary row."""
     url, raw_dir, max_pages, depth, stealth, shared_cache, page_workers, timeout_ms, fast_timeout_ms, idle_timeout_ms = args
@@ -74,12 +85,26 @@ def main():
     parser.add_argument("--idle-timeout", type=int, default=5_000,
                         help="Post-scroll networkidle wait timeout in ms (default: 5000)")
     parser.add_argument("--no-stealth", action="store_true", help="Disable anti-bot evasion (faster, less stealthy)")
+    parser.add_argument("--retry", nargs="*", metavar="STATUS",
+                        help="Re-crawl URLs whose last status matches any of the given values. "
+                             "If given with no arguments, retries 'timeout', 'error', and 'partial'. "
+                             "Example: --retry timeout error")
     args = parser.parse_args()
 
     with open(args.input) as f:
         urls = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
     done_urls = _load_done_urls(args.output)
+
+    # --retry: re-queue URLs that previously failed/timed-out/were partial
+    if args.retry is not None:
+        retry_statuses = set(args.retry) if args.retry else {"timeout", "error", "partial"}
+        retry_urls = _load_retry_urls(args.output, retry_statuses)
+        if retry_urls:
+            print(f"Retrying {len(retry_urls)} URLs with status in {retry_statuses}")
+        # Exclude retry targets from done_urls so they get re-processed
+        done_urls -= retry_urls
+
     pending = [u for u in urls if u not in done_urls]
 
     if not pending:

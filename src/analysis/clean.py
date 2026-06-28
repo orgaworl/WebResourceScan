@@ -16,6 +16,8 @@ def main():
     parser.add_argument("--input", default="data/results.csv")
     parser.add_argument("--output", default="data/results_clean.csv")
     parser.add_argument("--urls-file", default="urls.txt", help="urls.txt for site category mapping")
+    parser.add_argument("--min-resources", type=int, default=10,
+                        help="Sites with fewer resources than this are marked 'partial' and excluded (default: 10)")
     args = parser.parse_args()
 
     df = pd.read_csv(args.input)
@@ -24,6 +26,13 @@ def main():
     # Deduplicate on normalized URL (strip trailing slash), keep first
     df["_url_norm"] = df["url"].str.rstrip("/")
     df = df.drop_duplicates(subset="_url_norm", keep="first").drop(columns="_url_norm")
+
+    # Sites that returned ok but have too few resources are "partial" —
+    # they were blocked by WAF/geo-redirect but returned HTTP 200.
+    ok_mask = df["status"] == "ok"
+    thin_mask = ok_mask & (df["total_resources"] < args.min_resources)
+    df.loc[thin_mask, "status"] = "partial"
+    partial_count = thin_mask.sum()
 
     df = df[df["status"] == "ok"].copy()
     dropped = total - len(df)
@@ -77,7 +86,8 @@ def main():
         df["domain_diversity"] = (df["unique_domains"] / total_res.fillna(1)).fillna(0).round(4)
 
     df.to_csv(args.output, index=False)
-    print(f"Kept {len(df)} rows, dropped {dropped} rows (status != ok or duplicate)")
+    print(f"Kept {len(df)} rows, dropped {dropped} rows "
+          f"(status != ok or duplicate, incl. {partial_count} partial/WAF-blocked)")
     print(f"Site categories: {df['site_category'].value_counts().to_dict()}")
     print(f"Saved to {args.output}")
 

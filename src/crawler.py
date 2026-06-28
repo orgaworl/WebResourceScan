@@ -109,8 +109,13 @@ def _crawl_page(page, url: str, resources: list[dict], timeout_ms: int, stealth:
             initiator = initiator_info.get("type", "") if isinstance(initiator_info, dict) else ""
         except Exception:
             initiator = ""
+        # Record from_iframe only when the request originates from a nested frame,
+        # not from the main frame itself.
         try:
-            frame_url = req.frame.url if req.frame and req.frame.url != url else ""
+            if req.frame and req.frame != page.main_frame:
+                frame_url = req.frame.url or ""
+            else:
+                frame_url = ""
         except Exception:
             frame_url = ""
 

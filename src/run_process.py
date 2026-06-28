@@ -9,6 +9,7 @@ from .classifier import DomainClassifier
 from .raw_io import read_raw, RAW_COLUMNS
 from .reporter import build_row, CSV_COLUMNS
 from .analysis.categories import build_site_category_map, get_site_category
+from .analysis.vulns import scan_raw_dir, write_vulns
 
 import pandas as pd
 
@@ -80,12 +81,18 @@ def _aggregate(raw_dir: str, output: str) -> None:
     print(f"Aggregated {written} sites → {output}")
 
 
-def _clean(input_csv: str, output_csv: str, urls_file: str) -> None:
+def _clean(input_csv: str, output_csv: str, urls_file: str, min_resources: int = 10) -> None:
     df = pd.read_csv(input_csv)
     total = len(df)
 
     df["_url_norm"] = df["url"].str.rstrip("/")
     df = df.drop_duplicates(subset="_url_norm", keep="first").drop(columns="_url_norm")
+
+    ok_mask = df["status"] == "ok"
+    thin_mask = ok_mask & (df["total_resources"] < min_resources)
+    df.loc[thin_mask, "status"] = "partial"
+    partial_count = thin_mask.sum()
+
     df = df[df["status"] == "ok"].copy()
     dropped = total - len(df)
 
@@ -123,7 +130,8 @@ def _clean(input_csv: str, output_csv: str, urls_file: str) -> None:
         df["domain_diversity"] = (df["unique_domains"] / total_res.fillna(1)).fillna(0).round(4)
 
     df.to_csv(output_csv, index=False)
-    print(f"Kept {len(df)} rows, dropped {dropped} rows (status != ok or duplicate)")
+    print(f"Kept {len(df)} rows, dropped {dropped} rows "
+          f"(status != ok or duplicate, incl. {partial_count} partial/WAF-blocked)")
     print(f"Site categories: {df['site_category'].value_counts().to_dict()}")
     print(f"Saved to {output_csv}")
 
@@ -134,14 +142,26 @@ def main():
     parser.add_argument("--results",   default="data/results.csv",     help="Aggregated summary CSV (output of aggregate step)")
     parser.add_argument("--output",    default="data/results_clean.csv", help="Final cleaned CSV")
     parser.add_argument("--urls-file", default="urls.txt",             help="urls.txt for site category mapping")
+    parser.add_argument("--min-resources", type=int, default=10,
+                        help="Sites with fewer resources are marked partial and excluded (default: 10)")
     parser.add_argument("--skip-aggregate", action="store_true",
                         help="Skip re-aggregation, only run clean on existing --results file")
+    parser.add_argument("--vuln-output", default="data/vulns.csv",
+                        help="Output path for vulnerability scan results (default: data/vulns.csv)")
+    parser.add_argument("--skip-vuln", action="store_true",
+                        help="Skip vulnerability scan")
     args = parser.parse_args()
 
     if not args.skip_aggregate:
         _aggregate(args.raw_dir, args.results)
 
-    _clean(args.results, args.output, args.urls_file)
+    _clean(args.results, args.output, args.urls_file, min_resources=args.min_resources)
+
+    if not args.skip_vuln:
+        print("Scanning for known-vulnerable JS libraries...")
+        vuln_results = scan_raw_dir(args.raw_dir)
+        write_vulns(vuln_results, args.vuln_output)
+        print(f"Vulnerability scan: {len(vuln_results)} findings → {args.vuln_output}")
 
 
 if __name__ == "__main__":

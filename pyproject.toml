@@ -16,6 +16,7 @@ dependencies = [
 crawl   = "src.run_crawl:main"
 process = "src.run_process:main"
 plot    = "src.run_plot:main"
+clean   = "src.run_clean:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -23,8 +23,8 @@ def _load_done_urls(output_path: str) -> set[str]:
 
 def _worker(args: tuple) -> dict:
     """Runs in a subprocess: crawl one site, classify domains, write raw files, return summary row."""
-    url, raw_dir, max_pages, depth = args
-    crawl_result = crawl_site(url, max_pages=max_pages, depth=depth)
+    url, raw_dir, max_pages, depth, stealth = args
+    crawl_result = crawl_site(url, max_pages=max_pages, depth=depth, stealth=stealth)
     source_etld1 = _etld1(urlparse(url).netloc)
 
     third_party_domains = list({
@@ -54,10 +54,11 @@ def main():
     parser.add_argument("--workers", type=int, default=4, help="Number of parallel crawler processes")
     parser.add_argument("--max-pages", type=int, default=20, help="Max pages to crawl per site")
     parser.add_argument("--depth", type=int, default=2, help="BFS link-follow depth (0=entry page only)")
+    parser.add_argument("--no-stealth", action="store_true", help="Disable anti-bot evasion (faster, less stealthy)")
     args = parser.parse_args()
 
     with open(args.input) as f:
-        urls = [line.strip() for line in f if line.strip()]
+        urls = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
     done_urls = _load_done_urls(args.output)
     pending = [u for u in urls if u not in done_urls]
@@ -70,7 +71,7 @@ def main():
     os.makedirs(args.raw_dir, exist_ok=True)
     write_header = not os.path.exists(args.output)
 
-    tasks = [(url, args.raw_dir, args.max_pages, args.depth) for url in pending]
+    tasks = [(url, args.raw_dir, args.max_pages, args.depth, not args.no_stealth) for url in pending]
 
     with open(args.output, "a", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=CSV_COLUMNS)

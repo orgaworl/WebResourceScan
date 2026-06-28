@@ -4,6 +4,14 @@ from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 from .raw_io import _etld1
+from .stealth import (
+    STEALTH_ARGS,
+    apply_stealth,
+    human_scroll,
+    inter_page_delay,
+    random_ua,
+    random_viewport,
+)
 
 RESOURCE_TYPES = {"script", "stylesheet", "image", "media", "font", "xhr", "fetch"}
 
@@ -33,35 +41,25 @@ def _normalize_type(rt: str) -> str:
     return "other"
 
 
-def _scroll_page(page) -> None:
-    """Scroll to bottom then back to top to trigger lazy-loaded resources."""
-    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-    time.sleep(1.5)
-    page.evaluate("window.scrollTo(0, 0)")
-    time.sleep(0.5)
-
-
 def _collect_same_site_links(page, site_etld1: str) -> list[str]:
     """Extract and normalise all same-site <a href> links from the current page."""
     try:
         hrefs = page.eval_on_selector_all("a[href]", "els => els.map(e => e.href)")
     except Exception:
         return []
-    links = []
-    for href in hrefs:
-        if _same_site(href, site_etld1):
-            links.append(_normalize_url(href))
-    return links
+    return [
+        _normalize_url(href)
+        for href in hrefs
+        if _same_site(href, site_etld1)
+    ]
 
 
-def _crawl_page(page, url: str, resources: list[dict], timeout_ms: int) -> str:
+def _crawl_page(page, url: str, resources: list[dict], timeout_ms: int, stealth: bool) -> str:
     """
-    Navigate to url, attach request/response listeners, scroll, collect links.
-    Appends resource dicts (with source_page set) into resources list.
-    Returns crawl status: "ok" | "timeout" | "error".
+    Navigate to url, attach request/response listeners, scroll, return status.
+    Appends resource dicts into resources list.
     """
     status = "ok"
-    # index into resources list at the start of this page — used to match responses
     start_idx = len(resources)
 
     def on_request(req):
@@ -106,7 +104,13 @@ def _crawl_page(page, url: str, resources: list[dict], timeout_ms: int) -> str:
 
     try:
         page.goto(url, timeout=timeout_ms, wait_until="networkidle")
-        _scroll_page(page)
+        if stealth:
+            human_scroll(page)
+        else:
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            time.sleep(1.5)
+            page.evaluate("window.scrollTo(0, 0)")
+            time.sleep(0.5)
         try:
             page.wait_for_load_state("networkidle", timeout=5_000)
         except PlaywrightTimeout:
@@ -126,11 +130,17 @@ def crawl_site(
     max_pages: int = 20,
     depth: int = 2,
     timeout_ms: int = 30_000,
+    stealth: bool = True,
 ) -> dict:
     """
     BFS crawl of a site starting from entry_url.
-    Visits up to max_pages unique pages within the same eTLD+1, up to given depth.
-    Returns {"url": entry_url, "status": str, "resources": [...]}.
+
+    When stealth=True:
+    - Random User-Agent and viewport per browser session
+    - JS init patches (navigator.webdriver, plugins, chrome object)
+    - Chromium launched with automation-disabling flags
+    - Human-like random-step scroll on each page
+    - Random delay between page navigations
     """
     site_etld1 = _etld1(urlparse(entry_url).netloc)
     visited: set[str] = set()
@@ -138,10 +148,22 @@ def crawl_site(
     all_resources: list[dict] = []
     overall_status = "ok"
 
+    launch_kwargs: dict = {"headless": True}
+    context_kwargs: dict = {}
+
+    if stealth:
+        launch_kwargs["args"] = STEALTH_ARGS
+        context_kwargs["user_agent"] = random_ua()
+        context_kwargs["viewport"] = random_viewport()
+
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            browser = p.chromium.launch(**launch_kwargs)
+            context = browser.new_context(**context_kwargs)
+            page = context.new_page()
+
+            if stealth:
+                apply_stealth(page)
 
             while queue and len(visited) < max_pages:
                 current_url, current_depth = queue.pop(0)
@@ -149,7 +171,11 @@ def crawl_site(
                     continue
                 visited.add(current_url)
 
-                status = _crawl_page(page, current_url, all_resources, timeout_ms)
+                # Random inter-page delay to avoid rate limiting (skip for first page)
+                if stealth and len(visited) > 1:
+                    inter_page_delay()
+
+                status = _crawl_page(page, current_url, all_resources, timeout_ms, stealth)
 
                 if current_url == _normalize_url(entry_url) and status != "ok":
                     overall_status = status

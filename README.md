@@ -2,7 +2,7 @@
 
 测量特定领域网页上的软件资源并分类统计（赌博、游戏、广告等）。
 
-以网页列表文件为输入，使用无头浏览器捕获每个页面加载的所有网络资源，通过 LLM 对第三方域名进行行业分类，输出统计结果到 CSV 表格，并提供数据整理和画图脚本。
+以网页列表文件为输入，使用无头浏览器对每个站点进行多页 BFS 爬取，捕获所有网络资源（含懒加载和 iframe 资源），通过规则匹配对第三方域名进行行业分类，输出统计结果到 CSV 表格，并提供数据整理和画图脚本。
 
 ---
 
@@ -56,47 +56,46 @@ https://another-site.com
 ### 2. 爬取并生成原始数据
 
 ```bash
-# 使用 .env 中的 INPUT_FILE 默认值
-uv run python main.py
+# 使用 .env 中的 INPUT_FILE 默认值（BFS 深度2，每站最多20页）
+uv run crawl
 
-# 或显式指定参数
-uv run python main.py --input urls.txt --output data/results.csv --raw-dir data/raw --cache data/domain_cache.json
+# 显式指定所有参数
+uv run crawl --input urls.txt --output data/results.csv --raw-dir data/raw --workers 4 --max-pages 20 --depth 2
 ```
 
-每个 URL 会在 `data/raw/` 下生成一个独立的原始 CSV 文件，记录该页面加载的所有资源详情；同时汇总到 `data/results.csv`。
+每个站点会在 `data/raw/` 下生成一个独立的原始 CSV 文件，记录该站所有子页面加载的全部资源详情；同时汇总到 `data/results.csv`。
 
 参数说明：
 
-| 参数 | 默认值来源 | 说明 |
+| 参数 | 默认值 | 说明 |
 |---|---|---|
 | `--input` | `INPUT_FILE` 环境变量 | URL 列表文件路径 |
 | `--output` | `data/results.csv` | 汇总统计 CSV 路径 |
 | `--raw-dir` | `data/raw` | 原始资源文件目录 |
 | `--workers` | `4` | 并行爬取进程数 |
+| `--max-pages` | `20` | 每个站点最多爬取页面数 |
+| `--depth` | `2` | BFS 链接跟踪深度（0=仅入口页） |
 
 **断点续传**：重新运行会自动跳过已处理的 URL。
 
 ### 3. 重新统计（无需重新爬取）
 
-如果只想修改分类或重新聚合，可以从已有原始文件重跑：
+如果只想更新分类或重新聚合，可从已有原始文件重跑：
 
 ```bash
-uv run python aggregate.py --raw-dir data/raw --output data/results.csv
-
-# 强制重新调用 LLM 对所有域名重新分类
-uv run python aggregate.py --raw-dir data/raw --output data/results.csv --reclassify
+uv run aggregate --raw-dir data/raw --output data/results.csv
 ```
 
 ### 4. 数据清理
 
 ```bash
-uv run python analysis/clean.py --input data/results.csv --output data/results_clean.csv
+uv run clean --input data/results.csv --output data/results_clean.csv
 ```
 
 ### 5. 画图
 
 ```bash
-uv run python analysis/plot.py --input data/results_clean.csv --output-dir data/charts
+uv run plot --input data/results_clean.csv --output-dir data/charts
 ```
 
 生成的图表：
@@ -121,6 +120,9 @@ uv run python analysis/plot.py --input data/results_clean.csv --output-dir data/
 | `content_length_bytes` | 响应体大小（字节），-1 表示未知 |
 | `is_third_party` | 是否为第三方域名 |
 | `domain_category` | 域名行业分类（仅第三方）|
+| `source_page` | 产生该资源的子页面 URL |
+| `initiator` | 请求发起方类型（parser / script / other） |
+| `from_iframe` | 若资源由 iframe 发起则为 iframe URL，否则为空 |
 
 ### 汇总文件 `data/results.csv` — 每行一个页面
 
@@ -151,6 +153,7 @@ uv run python analysis/plot.py --input data/results_clean.csv --output-dir data/
 │       └── plot.py      # 画图脚本
 ├── tests/
 │   ├── test_classifier.py
+│   ├── test_crawler.py
 │   └── test_reporter.py
 ├── data/
 │   ├── raw/             # 每站原始资源 CSV（gitignore）

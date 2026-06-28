@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from . import config
 from .classifier import DomainClassifier
-from .crawler import crawl
+from .crawler import crawl_site
 from .raw_io import _etld1, raw_path, read_raw, write_raw
 from .reporter import CSV_COLUMNS, build_row
 
@@ -22,19 +22,19 @@ def _load_done_urls(output_path: str) -> set[str]:
 
 
 def _worker(args: tuple) -> dict:
-    """Runs in a subprocess: crawl one URL, classify domains, write raw files, return summary row."""
-    url, raw_dir = args
-    crawl_result = crawl(url)
+    """Runs in a subprocess: crawl one site, classify domains, write raw files, return summary row."""
+    url, raw_dir, max_pages, depth = args
+    crawl_result = crawl_site(url, max_pages=max_pages, depth=depth)
     source_etld1 = _etld1(urlparse(url).netloc)
 
-    third_party_domains = [
+    third_party_domains = list({
         r["domain"] for r in crawl_result.get("resources", [])
         if r["domain"] and _etld1(r["domain"]) != source_etld1
-    ]
+    })
 
     classifier = DomainClassifier()
     if third_party_domains:
-        classifier.classify(list(set(third_party_domains)))
+        classifier.classify(third_party_domains)
 
     write_raw(crawl_result, classifier.cache, source_etld1, raw_dir)
 
@@ -52,6 +52,8 @@ def main():
     parser.add_argument("--output", default="data/results.csv", help="Output summary CSV path")
     parser.add_argument("--raw-dir", default="data/raw", help="Directory for per-site raw resource CSVs")
     parser.add_argument("--workers", type=int, default=4, help="Number of parallel crawler processes")
+    parser.add_argument("--max-pages", type=int, default=20, help="Max pages to crawl per site")
+    parser.add_argument("--depth", type=int, default=2, help="BFS link-follow depth (0=entry page only)")
     args = parser.parse_args()
 
     with open(args.input) as f:
@@ -68,7 +70,7 @@ def main():
     os.makedirs(args.raw_dir, exist_ok=True)
     write_header = not os.path.exists(args.output)
 
-    tasks = [(url, args.raw_dir) for url in pending]
+    tasks = [(url, args.raw_dir, args.max_pages, args.depth) for url in pending]
 
     with open(args.output, "a", newline="") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=CSV_COLUMNS)
@@ -80,7 +82,7 @@ def main():
                 pool.imap_unordered(_worker, tasks),
                 total=len(tasks),
                 desc="Crawling",
-                unit="url",
+                unit="site",
             ):
                 writer.writerow(row)
                 csvfile.flush()

@@ -17,6 +17,9 @@ RAW_COLUMNS = [
     "content_length_bytes",
     "is_third_party",
     "domain_category",
+    "source_page",
+    "initiator",
+    "from_iframe",
 ]
 
 
@@ -48,6 +51,9 @@ def write_raw(crawl_result: dict, domain_cache: dict, source_etld1: str, raw_dir
                 "content_length_bytes": r.get("content_length_bytes", -1),
                 "is_third_party": is_third,
                 "domain_category": domain_cache.get(domain, "other") if is_third else "",
+                "source_page": r.get("source_page", ""),
+                "initiator": r.get("initiator", ""),
+                "from_iframe": r.get("from_iframe", ""),
             })
     return path
 

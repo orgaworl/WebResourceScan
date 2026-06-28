@@ -1,6 +1,13 @@
 from src.reporter import build_row, CSV_COLUMNS
 
 
+def test_raw_columns_include_new_fields():
+    from src.raw_io import RAW_COLUMNS
+    assert "source_page" in RAW_COLUMNS
+    assert "initiator" in RAW_COLUMNS
+    assert "from_iframe" in RAW_COLUMNS
+
+
 def test_empty_resources_all_zeros():
     row = build_row("https://example.com", "ok", [])
     assert row["url"] == "https://example.com"
@@ -13,9 +20,12 @@ def test_empty_resources_all_zeros():
 
 def test_counts_resource_types():
     resources = [
-        {"resource_type": "script", "domain": "example.com", "is_third_party": "False", "domain_category": ""},
-        {"resource_type": "script", "domain": "example.com", "is_third_party": "False", "domain_category": ""},
-        {"resource_type": "stylesheet", "domain": "example.com", "is_third_party": "False", "domain_category": ""},
+        {"resource_type": "script", "domain": "example.com", "is_third_party": "False",
+         "domain_category": "", "source_page": "https://example.com", "initiator": "parser", "from_iframe": ""},
+        {"resource_type": "script", "domain": "example.com", "is_third_party": "False",
+         "domain_category": "", "source_page": "https://example.com", "initiator": "parser", "from_iframe": ""},
+        {"resource_type": "stylesheet", "domain": "example.com", "is_third_party": "False",
+         "domain_category": "", "source_page": "https://example.com", "initiator": "parser", "from_iframe": ""},
     ]
     row = build_row("https://example.com", "ok", resources)
     assert row["total_resources"] == 3
@@ -25,10 +35,14 @@ def test_counts_resource_types():
 
 def test_counts_third_party_domain_categories():
     resources = [
-        {"resource_type": "script", "domain": "bet365.com", "is_third_party": "True", "domain_category": "gambling"},
-        {"resource_type": "image", "domain": "bet365.com", "is_third_party": "True", "domain_category": "gambling"},
-        {"resource_type": "script", "domain": "unity3d.com", "is_third_party": "True", "domain_category": "gaming"},
-        {"resource_type": "script", "domain": "example.com", "is_third_party": "False", "domain_category": ""},
+        {"resource_type": "script", "domain": "bet365.com", "is_third_party": "True",
+         "domain_category": "gambling", "source_page": "https://example.com", "initiator": "script", "from_iframe": ""},
+        {"resource_type": "image", "domain": "bet365.com", "is_third_party": "True",
+         "domain_category": "gambling", "source_page": "https://example.com", "initiator": "parser", "from_iframe": ""},
+        {"resource_type": "script", "domain": "unity3d.com", "is_third_party": "True",
+         "domain_category": "gaming", "source_page": "https://example.com/game", "initiator": "script", "from_iframe": "https://example.com/iframe-host"},
+        {"resource_type": "script", "domain": "example.com", "is_third_party": "False",
+         "domain_category": "", "source_page": "https://example.com", "initiator": "parser", "from_iframe": ""},
     ]
     row = build_row("https://example.com", "ok", resources)
     assert row["cat_gambling"] == 1

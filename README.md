@@ -56,104 +56,79 @@ https://another-site.com
 ### 2. 爬取并生成原始数据
 
 ```bash
-# 使用 .env 中的 INPUT_FILE 默认值（BFS 深度2，每站最多20页）
 uv run crawl
-
-# 显式指定所有参数
-uv run crawl --input urls.txt --output data/results.csv --raw-dir data/raw --workers 4 --max-pages 20 --depth 2
 ```
 
-每个站点会在 `data/raw/` 下生成一个独立的原始 CSV 文件，记录该站所有子页面加载的全部资源详情；同时汇总到 `data/results.csv`。
-
-参数说明：
+每个站点在 `data/raw/` 下生成 `.csv.gz` 原始资源文件，同时汇总到 `data/results.csv`。
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
-| `--input` | `INPUT_FILE` 环境变量 | URL 列表文件路径 |
+| `--input` | `urls.txt` | URL 列表文件路径 |
 | `--output` | `data/results.csv` | 汇总统计 CSV 路径 |
 | `--raw-dir` | `data/raw` | 原始资源文件目录 |
 | `--workers` | 自适应 | 并行爬取进程数（默认：min(CPU数, 站点数, 8)） |
-| `--page-workers` | `1` | 每站点并行页数（最大值自动限制为3） |
-| `--max-pages` | `20` | 每个站点最多爬取页面数 |
+| `--page-workers` | `1` | 每站点并行页数（最大3） |
+| `--max-pages` | `20` | 每站点最多爬取页面数 |
 | `--depth` | `2` | BFS 链接跟踪深度（0=仅入口页） |
-| `--no-stealth` | 关闭 | 禁用反检测策略（速度更快） |
-
-### 性能优化说明
-
-- **二进制资源拦截**：image/media/font 类型请求只记录元数据，不下载响应体，显著减少带宽占用
-- **分级超时**：首次尝试 8s 快速失败，失败后用完整超时重试，避免慢站阻塞并发队列
-- **BFS 链接过滤**：自动跳过 login/logout/cart/checkout 等无价值路径，聚焦爬取预算
-- **共享分类缓存**：所有 worker 进程共享域名分类结果，避免重复计算
-- **自适应并发**：根据 CPU 核数和待处理站点数自动调整 worker 数量
-- **压缩存储**：原始文件以 `.csv.gz` 格式存储，减少约 70-80% 磁盘空间
-- **页面级断点续传**：每个子页面爬取成功后写入 checkpoint，重启后跳过已爬页面
-- **站点内并行**：`--page-workers > 1` 时，每站点使用多个浏览器 context 并行爬取子页面
+| `--no-stealth` | 关闭 | 禁用反检测策略 |
 
 **断点续传**：重新运行会自动跳过已处理的 URL。
 
-### 3. 重新统计（无需重新爬取）
-
-如果只想更新分类或重新聚合，可从已有原始文件重跑：
+### 3. 数据处理
 
 ```bash
-uv run aggregate --raw-dir data/raw --output data/results.csv
+uv run process
 ```
 
-### 4. 数据清理
+依次执行：①从 `data/raw/` 重新聚合 → ②过滤清洗 → ③计算衍生指标，输出 `data/results_clean.csv`。
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `--raw-dir` | `data/raw` | 原始资源文件目录 |
+| `--results` | `data/results.csv` | 聚合中间文件 |
+| `--output` | `data/results_clean.csv` | 最终清洗文件 |
+| `--urls-file` | `urls.txt` | 用于行业分类映射 |
+| `--skip-aggregate` | 关闭 | 跳过聚合，仅重新清洗 |
+
+新增衍生列：`site_category`（行业分类）、`script_ratio`、`tp_domain_count`、`tp_ratio`、`ad_intensity`、`image_ratio`。
+
+### 4. 画图
 
 ```bash
-uv run clean --input data/results.csv --output data/results_clean.csv
+uv run plot
 ```
 
-生成 `data/results_clean.csv`，新增以下列：
+从 `data/results_clean.csv` 生成全部 12 张图表，保存到 `data/charts/`。
 
-| 列名 | 说明 |
-|---|---|
-| `site_category` | 站点所属行业分类（gambling/gaming/crypto 等，来自 urls.txt） |
-| `script_ratio` | 脚本密度：(res_script + res_xhr) / total_resources |
-| `tp_domain_count` | 独立第三方域名数量 |
-| `tp_ratio` | 第三方资源占比 |
-| `ad_intensity` | 广告追踪强度：cat_ad / total_resources |
-| `image_ratio` | 图片资源占比 |
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `--input` | `data/results_clean.csv` | 清洗后的数据文件 |
+| `--raw-results` | `data/results.csv` | 含全部状态的原始汇总（用于成功率图） |
+| `--output-dir` | `data/charts` | 图表输出目录 |
 
-### 5. 画图
-
-```bash
-# 概览图（3张）
-uv run plot --input data/results_clean.csv --output-dir data/charts
-
-# 行业对比图（5张）
-uv run plot-industry --input data/results_clean.csv --raw-results data/results.csv --output-dir data/charts
-
-# 第三方域名分析图（4张）
-uv run plot-domains --input data/results_clean.csv --output-dir data/charts
-```
-
-生成的图表（共 12 张）：
-
-**概览图** (`uv run plot`)
-| 文件名 | 说明 |
+**概览图（3张）**
+| 文件 | 说明 |
 |---|---|
 | `resource_category_donut.png` | 第三方域名行业类别占比环形图 |
-| `resource_bar.png` | 各资源类型（JS/CSS/图片等）数量柱状图，附百分比 |
-| `url_heatmap.png` | 各站点的行业域名数量热力图（按 site_category 排序） |
+| `resource_bar.png` | 各资源类型数量柱状图（附百分比） |
+| `url_heatmap.png` | 各站点行业域名数量热力图 |
 
-**行业对比图** (`uv run plot-industry`)
-| 文件名 | 说明 |
+**行业对比图（5张）**
+| 文件 | 说明 |
 |---|---|
-| `crawl_success_rate.png` | 各行业爬取成功率（颜色标注高/中/低成功率） |
-| `resource_mix_by_industry.png` | 各行业资源类型构成 100% 堆叠横条图 |
-| `tp_load_by_industry.png` | 各行业第三方域名分类加载量分组柱状图 |
-| `script_ratio_boxplot.png` | 各行业脚本密度（script+XHR占比）箱线图 |
-| `resource_count_scatter.png` | 各行业站点总资源数分布散点图（对数坐标） |
+| `crawl_success_rate.png` | 各行业爬取成功率 |
+| `resource_mix_by_industry.png` | 各行业资源类型构成 100% 堆叠图 |
+| `tp_load_by_industry.png` | 各行业第三方域名加载量 |
+| `script_ratio_boxplot.png` | 各行业脚本密度箱线图 |
+| `resource_count_scatter.png` | 各行业站点资源数散点图 |
 
-**第三方域名分析图** (`uv run plot-domains`)
-| 文件名 | 说明 |
+**第三方域名图（4张）**
+| 文件 | 说明 |
 |---|---|
-| `top_tp_domains.png` | 出现频次最高的 25 个第三方域名横条图 |
+| `top_tp_domains.png` | 最高频 25 个第三方域名 |
 | `domain_presence_heatmap.png` | 前 20 个域名在各行业的覆盖率热力图 |
-| `tp_bubble.png` | 资源数 vs. 第三方域名数气泡图（气泡大小=脚本密度） |
-| `domain_ubiquity_hist.png` | 第三方域名"普遍性"分布直方图（幂律分布） |
+| `tp_bubble.png` | 资源数 vs 第三方域名数气泡图 |
+| `domain_ubiquity_hist.png` | 第三方域名普遍性分布直方图 |
 
 ---
 

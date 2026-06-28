@@ -13,12 +13,9 @@ dependencies = [
 ]
 
 [project.scripts]
-crawl = "src.run_crawl:main"
-aggregate = "src.run_aggregate:main"
-clean = "src.analysis.clean:main"
-plot = "src.analysis.plot:main"
-plot-industry = "src.analysis.plot_industry:main"
-plot-domains = "src.analysis.plot_domains:main"
+crawl   = "src.run_crawl:main"
+process = "src.run_process:main"
+plot    = "src.run_plot:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -17,6 +17,8 @@ crawl = "src.run_crawl:main"
 aggregate = "src.run_aggregate:main"
 clean = "src.analysis.clean:main"
 plot = "src.analysis.plot:main"
+plot-industry = "src.analysis.plot_industry:main"
+plot-domains = "src.analysis.plot_domains:main"
 
 [build-system]
 requires = ["hatchling"]

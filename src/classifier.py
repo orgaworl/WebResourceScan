@@ -254,6 +254,50 @@ KNOWN_DOMAINS: dict[str, str] = {
     "digitaloceanspaces.com": "cdn",
     "storage.googleapis.com": "cdn",
     "r2.dev": "cdn",
+    # ── consent / privacy management ─────────────────────────────────────────
+    "onetrust.com": "analytics",
+    "cookielaw.org": "analytics",
+    "cookiebot.com": "analytics",
+    "usercentrics.eu": "analytics",
+    "usercentrics.de": "analytics",
+    "privacymanager.io": "analytics",
+    "consent.google.com": "analytics",
+    "consentcdn.cookiebot.com": "analytics",
+    # ── fonts / icon CDNs ─────────────────────────────────────────────────────
+    "fontawesome.com": "cdn",
+    "font-awesome.io": "cdn",
+    "fonts.gstatic.com": "cdn",
+    # ── identity / SSO ────────────────────────────────────────────────────────
+    "accounts.google.com": "analytics",
+    "appleid.apple.com": "analytics",
+    "hcaptcha.com": "cdn",
+    # ── Google general (search surface, maps, etc.) ───────────────────────────
+    "google.com": "ad",
+    # ── RTB / programmatic ad infrastructure ─────────────────────────────────
+    "adform.net": "ad",
+    "demdex.net": "ad",
+    "3lift.com": "ad",
+    "id5-sync.com": "ad",
+    "eyeota.net": "ad",
+    "crwdcntrl.net": "ad",
+    "semasio.net": "ad",
+    "casalemedia.com": "ad",
+    "2mdn.net": "ad",
+    "everesttech.net": "ad",
+    "mxpnl.com": "analytics",
+    "btloader.com": "ad",
+    "dns-finder.com": "ad",
+    # ── video / streaming CDN infrastructure ─────────────────────────────────
+    "youtube-nocookie.com": "social",
+    "bamgrid.com": "cdn",
+    "speedysurfcdn.net": "cdn",
+    "wknd.ai": "analytics",
+    # ── error monitoring / APM ────────────────────────────────────────────────
+    "bugsnag.net": "analytics",
+    "newrelic.com": "analytics",
+    "nr-data.net": "analytics",
+    "datadog-browser-agent.com": "analytics",
+    "browser-intake-datadoghq.com": "analytics",
 }
 
 KEYWORDS: dict[str, list[str]] = {

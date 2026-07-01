@@ -192,7 +192,7 @@ def main() -> None:
     parser.add_argument("--raw-results", default="data/results.csv",
                         help="Full results CSV (all statuses) for success-rate chart")
     parser.add_argument("--urls-file", default="urls.txt")
-    parser.add_argument("--output-dir", default="data/charts")
+    parser.add_argument("--output-dir", default="plot")
     args = parser.parse_args()
 
     apply_style()

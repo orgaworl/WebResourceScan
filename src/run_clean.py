@@ -9,7 +9,7 @@ def main():
     parser.add_argument("--raw-dir",    default="data/raw",              help="Per-site raw resource directory")
     parser.add_argument("--results",    default="data/results.csv",      help="Aggregated summary CSV")
     parser.add_argument("--clean-csv",  default="data/results_clean.csv", help="Cleaned CSV")
-    parser.add_argument("--charts-dir", default="data/charts",           help="Charts directory")
+    parser.add_argument("--charts-dir", default="plot",           help="Charts directory")
     parser.add_argument("--all",  action="store_true", help="Delete everything (raw + csvs + charts)")
     parser.add_argument("--raw",  action="store_true", help="Delete raw resource files only")
     parser.add_argument("--csv",  action="store_true", help="Delete results CSVs only")

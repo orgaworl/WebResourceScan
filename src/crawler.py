@@ -92,7 +92,7 @@ def _collect_same_site_links(page, site_etld1: str) -> list[str]:
 
 
 def _crawl_page(page, url: str, resources: list[dict], timeout_ms: int, stealth: bool,
-                fast_timeout_ms: int = 5_000, idle_timeout_ms: int = 5_000) -> str:
+                fast_timeout_ms: int = 8_000, idle_timeout_ms: int = 5_000) -> str:
     """
     Navigate to url, attach request/response listeners, scroll, return status.
     Appends resource dicts into resources list.
@@ -168,10 +168,13 @@ def _crawl_page(page, url: str, resources: list[dict], timeout_ms: int, stealth:
     page.route("**/*", handle_route)
 
     try:
+        # Two-stage load: try fast domcontentloaded first, fall back to full timeout.
+        # networkidle is avoided on first attempt because many SPAs never reach it
+        # within a short window, causing unnecessary timeouts on healthy pages.
         try:
-            page.goto(url, timeout=fast_timeout_ms, wait_until="networkidle")
+            page.goto(url, timeout=fast_timeout_ms, wait_until="domcontentloaded")
         except PlaywrightTimeout:
-            page.goto(url, timeout=timeout_ms, wait_until="networkidle")
+            page.goto(url, timeout=timeout_ms, wait_until="load")
 
         if stealth:
             human_scroll(page)
@@ -180,6 +183,7 @@ def _crawl_page(page, url: str, resources: list[dict], timeout_ms: int, stealth:
             time.sleep(1.5)
             page.evaluate("window.scrollTo(0, 0)")
             time.sleep(0.5)
+        # Wait for network to settle after scroll; tolerate timeout (SPA may keep polling)
         try:
             page.wait_for_load_state("networkidle", timeout=idle_timeout_ms)
         except PlaywrightTimeout:
@@ -202,8 +206,8 @@ def crawl_site(
     entry_url: str,
     max_pages: int = 20,
     depth: int = 2,
-    timeout_ms: int = 5_000,
-    fast_timeout_ms: int = 5_000,
+    timeout_ms: int = 15_000,
+    fast_timeout_ms: int = 8_000,
     idle_timeout_ms: int = 5_000,
     stealth: bool = True,
     checkpoint_dir: str | None = None,

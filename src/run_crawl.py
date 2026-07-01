@@ -78,10 +78,10 @@ def main():
     )
     parser.add_argument("--max-pages", type=int, default=20, help="Max pages to crawl per site")
     parser.add_argument("--depth", type=int, default=2, help="BFS link-follow depth (0=entry page only)")
-    parser.add_argument("--timeout", type=int, default=5_000,
-                        help="Full page load timeout in ms (default: 5000)")
-    parser.add_argument("--fast-timeout", type=int, default=5_000,
-                        help="Fast-path timeout for first load attempt in ms (default: 5000)")
+    parser.add_argument("--timeout", type=int, default=15_000,
+                        help="Full page load timeout in ms (default: 15000)")
+    parser.add_argument("--fast-timeout", type=int, default=8_000,
+                        help="Fast-path domcontentloaded timeout in ms (default: 8000)")
     parser.add_argument("--idle-timeout", type=int, default=5_000,
                         help="Post-scroll networkidle wait timeout in ms (default: 5000)")
     parser.add_argument("--no-stealth", action="store_true", help="Disable anti-bot evasion (faster, less stealthy)")

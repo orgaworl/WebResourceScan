@@ -155,15 +155,17 @@ def plot_heatmap(df: pd.DataFrame, out_dir: str) -> None:
         df = df.head(50)
     heat_df = df.set_index("url")[CAT_COLS].copy()
     heat_df.columns = CAT_LABELS
+    # log1p scale so extreme outliers (poki CDN=28k) don't compress all other rows
+    heat_log = np.log1p(heat_df.values)
     n_rows = len(heat_df)
     fig, ax = plt.subplots(figsize=(max(10, len(CAT_COLS) * 1.8), max(8, n_rows * 0.38 + 2)))
-    im = ax.imshow(heat_df.values, aspect="auto", cmap="RdYlGn", vmin=0)
+    im = ax.imshow(heat_log, aspect="auto", cmap="RdYlGn", vmin=0)
     ax.set_xticks(range(len(CAT_LABELS)))
     ax.set_xticklabels(CAT_LABELS, rotation=30, ha="right", fontsize=9)
     ax.set_yticks(range(n_rows))
     ax.set_yticklabels([u.split("//")[-1].split("/")[0] for u in heat_df.index], fontsize=6)
-    ax.set_title("各站点第三方域名类别数量热力图")
-    fig.colorbar(im, ax=ax, label="域名数量", shrink=0.6, pad=0.02)
+    ax.set_title("各站点第三方域名类别数量热力图（颜色 = log(1+x) 变换）")
+    fig.colorbar(im, ax=ax, label="log(1+域名数)", shrink=0.6, pad=0.02)
     _save(fig, out_dir, "03_url_heatmap.png")
 
 
@@ -172,17 +174,21 @@ def plot_heatmap(df: pd.DataFrame, out_dir: str) -> None:
 def plot_crawl_success_by_industry(df_raw: pd.DataFrame, out_dir: str) -> None:
     if "site_category" not in df_raw.columns:
         return
+    # "ok" means status==ok AND total_resources>=10; partial already applied upstream
     grouped = df_raw.groupby("site_category")["status"].apply(
         lambda s: (s == "ok").sum() / len(s) * 100
     ).sort_values(ascending=True)
-    zh_labels = [_zh(c) for c in grouped.index]
+    counts = df_raw.groupby("site_category")["status"].apply(
+        lambda s: f"{(s == 'ok').sum()}/{len(s)}"
+    )
+    zh_labels = [f"{_zh(c)}  ({counts[c]})" for c in grouped.index]
     colors = ["#2a9d8f" if v >= 70 else "#f4a261" if v >= 40 else "#e63946"
               for v in grouped.values]
     fig, ax = plt.subplots(figsize=(10, max(5, len(grouped) * 0.6)))
     bars = ax.barh(zh_labels, grouped.values, color=colors, edgecolor="white", linewidth=0.8)
     ax.set_xlim(0, 115)
     ax.set_xlabel("爬取成功率 (%)")
-    ax.set_title("各行业爬取成功率")
+    ax.set_title("各行业爬取成功率（括号内为 有效/总爬取 数）")
     for bar, v in zip(bars, grouped.values):
         ax.text(v + 1.5, bar.get_y() + bar.get_height() / 2,
                 f"{v:.0f}%", va="center", fontsize=9)
@@ -200,7 +206,9 @@ def plot_resource_mix_by_industry(df: pd.DataFrame, out_dir: str) -> None:
     row_sums = group.sum(axis=1).replace(0, np.nan)
     pct = group.div(row_sums, axis=0).fillna(0) * 100
     pct = pct.loc[pct.index.isin(SITE_CATS + ["unknown"])]
-    zh_labels = [_zh(c) for c in pct.index]
+    # n= per industry from df
+    n_map = df.groupby("site_category").size()
+    zh_labels = [f"{_zh(c)}  (n={n_map.get(c, 0)})" for c in pct.index]
     fig, ax = plt.subplots(figsize=(12, max(5, len(pct) * 0.65)))
     lefts = np.zeros(len(pct))
     for i, (col, label) in enumerate(zip(RES_COLS, RES_LABELS)):
@@ -214,7 +222,7 @@ def plot_resource_mix_by_industry(df: pd.DataFrame, out_dir: str) -> None:
         lefts += vals
     ax.set_xlim(0, 100)
     ax.set_xlabel("资源类型占比 (%)")
-    ax.set_title("各行业资源类型构成")
+    ax.set_title("各行业资源类型构成（均值，括号内为样本量）")
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.22),
               frameon=False, fontsize=8, ncol=4)
     _save(fig, out_dir, "05_resource_mix_by_industry.png")
@@ -223,22 +231,38 @@ def plot_resource_mix_by_industry(df: pd.DataFrame, out_dir: str) -> None:
 def plot_tp_load_by_industry(df: pd.DataFrame, out_dir: str) -> None:
     if "site_category" not in df.columns:
         return
-    group = df.groupby("site_category")[CAT_COLS].mean()
-    group = group.loc[group.index.isin(SITE_CATS + ["unknown"])]
-    n_cats, n_groups = len(group), len(CAT_COLS)
-    zh_index = [_zh(c) for c in group.index]
+    # Use median + IQR to resist the heavy-tail skew of resource counts
+    med = df.groupby("site_category")[CAT_COLS].median()
+    q25 = df.groupby("site_category")[CAT_COLS].quantile(0.25)
+    q75 = df.groupby("site_category")[CAT_COLS].quantile(0.75)
+    med = med.loc[med.index.isin(SITE_CATS + ["unknown"])]
+    q25 = q25.loc[med.index]
+    q75 = q75.loc[med.index]
+    n_map = df.groupby("site_category").size()
+    n_cats, n_groups = len(med), len(CAT_COLS)
+    # sort rows by total median third-party load
+    row_total = med.sum(axis=1).sort_values(ascending=False)
+    med = med.loc[row_total.index]
+    q25 = q25.loc[row_total.index]
+    q75 = q75.loc[row_total.index]
+    zh_index = [f"{_zh(c)}\n(n={n_map.get(c, 0)})" for c in med.index]
     x = np.arange(n_cats)
     width = min(0.8 / n_groups, 0.10)
     fig, ax = plt.subplots(figsize=(max(14, n_cats * 1.2), 6))
     for i, (col, label) in enumerate(zip(CAT_COLS, CAT_LABELS)):
         color = CAT_COL_COLORS[i]
         offset = (i - n_groups / 2 + 0.5) * width
-        ax.bar(x + offset, group[col].values, width, label=label, color=color,
+        vals = med[col].values
+        err_lo = (med[col] - q25[col]).clip(lower=0).values
+        err_hi = (q75[col] - med[col]).clip(lower=0).values
+        ax.bar(x + offset, vals, width, label=label, color=color,
                edgecolor="white", linewidth=0.5)
+        ax.errorbar(x + offset, vals, yerr=[err_lo, err_hi],
+                    fmt="none", color="#333333", linewidth=0.6, capsize=1.5)
     ax.set_xticks(x)
     ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=9)
-    ax.set_ylabel("每站点平均域名数量")
-    ax.set_title("各行业第三方域名加载量")
+    ax.set_ylabel("每站点域名数（中位数，误差棒=IQR）")
+    ax.set_title("各行业第三方域名加载量——中位数对比（括号内为样本量）")
     ax.legend(loc="upper right", frameon=False, fontsize=8, ncol=4)
     _save(fig, out_dir, "06_tp_load_by_industry.png")
 
@@ -250,7 +274,8 @@ def plot_script_ratio_boxplot(df: pd.DataFrame, out_dir: str) -> None:
     order = sorted(groups, key=lambda k: float(np.median(groups[k])), reverse=True)
     data = [groups[k] for k in order]
     colors = [CATEGORY_COLORS.get(k, "#aaaaaa") for k in order]
-    zh_labels = [_zh(k) for k in order]
+    n_map = df.groupby("site_category").size()
+    zh_labels = [f"{_zh(k)}\n(n={n_map.get(k, 0)})" for k in order]
     fig, ax = plt.subplots(figsize=(13, 6))
     bp = ax.boxplot(data, patch_artist=True,
                     medianprops={"color": "white", "linewidth": 2},
@@ -263,7 +288,7 @@ def plot_script_ratio_boxplot(df: pd.DataFrame, out_dir: str) -> None:
     ax.set_xticklabels(zh_labels, rotation=30, ha="right", fontsize=9)
     ax.set_ylabel("脚本密度（脚本+XHR / 总资源）")
     ax.set_ylim(-0.05, 1.15)
-    ax.set_title("各行业脚本/XHR 密度分布")
+    ax.set_title("各行业脚本/XHR 密度分布（括号内为样本量）")
     for i, d in enumerate(data):
         med = float(np.median(d))
         ax.text(i + 1, med + 0.05, f"{med:.2f}", ha="center", fontsize=7, color="#333333")
@@ -275,23 +300,44 @@ def plot_resource_count_scatter(df: pd.DataFrame, out_dir: str) -> None:
         return
     cats = sorted(df["site_category"].unique())
     cat_idx = {c: i for i, c in enumerate(cats)}
+    n_map = df.groupby("site_category").size()
     rng = np.random.default_rng(42)
     fig, ax = plt.subplots(figsize=(14, 6))
     for cat in cats:
         sub = df[df["site_category"] == cat]
         jitter = rng.uniform(-0.3, 0.3, len(sub))
-        ax.scatter(cat_idx[cat] + jitter, np.log10(sub["total_resources"].clip(lower=1)),
+        log_vals = np.log10(sub["total_resources"].clip(lower=1))
+        ax.scatter(cat_idx[cat] + jitter, log_vals,
                    color=CATEGORY_COLORS.get(cat, "#aaaaaa"), alpha=0.7, s=25, zorder=3)
-        mean_val = np.log10(sub["total_resources"].clip(lower=1)).mean()
-        ax.scatter(cat_idx[cat], mean_val, marker="D", color="black", s=60, zorder=5)
-    zh_labels = [_zh(c) for c in cats]
+        mean_val = log_vals.mean()
+        med_val = log_vals.median()
+        # mean: filled triangle ▲
+        ax.scatter(cat_idx[cat], mean_val, marker="^", color="black", s=55, zorder=5)
+        # median: filled diamond ◆
+        ax.scatter(cat_idx[cat], med_val, marker="D", color="#e63946", s=45, zorder=6)
+        # label outliers far above median
+        threshold = med_val + 1.2
+        for _, row in sub[log_vals > threshold].iterrows():
+            lv = np.log10(max(row["total_resources"], 1))
+            domain = row["url"].split("//")[-1].split("/")[0]
+            ax.annotate(domain, (cat_idx[cat] + rng.uniform(-0.1, 0.1), lv),
+                        fontsize=6, color="#333333", ha="center",
+                        xytext=(0, 6), textcoords="offset points")
+    zh_labels = [f"{_zh(c)}\n(n={n_map.get(c,0)})" for c in cats]
     ax.set_xticks(range(len(cats)))
     ax.set_xticklabels(zh_labels, rotation=35, ha="right", fontsize=9)
     ax.set_ylabel("log₁₀(总资源数)")
-    ax.set_title("各行业站点资源数分布（◆ = 均值）")
-    handles = [mpatches.Patch(color=CATEGORY_COLORS.get(c, "#aaaaaa"), label=_zh(c)) for c in cats]
-    ax.legend(handles=handles, frameon=False, fontsize=7, ncol=4,
-              loc="lower center", bbox_to_anchor=(0.5, -0.28), title="行业分类")
+    ax.set_title("各行业站点资源数分布（▲=均值，◆=中位数，两者差距反映分布偏态）")
+    # legend: categories + mean/median markers
+    cat_handles = [mpatches.Patch(color=CATEGORY_COLORS.get(c, "#aaaaaa"), label=_zh(c)) for c in cats]
+    marker_handles = [
+        ax.scatter([], [], marker="^", color="black", s=55, label="均值"),
+        ax.scatter([], [], marker="D", color="#e63946", s=45, label="中位数"),
+    ]
+    leg1 = ax.legend(handles=cat_handles, frameon=False, fontsize=7, ncol=3,
+                     loc="lower center", bbox_to_anchor=(0.5, -0.38), title="行业分类")
+    ax.add_artist(leg1)
+    ax.legend(handles=marker_handles, frameon=False, fontsize=8, loc="upper right")
     _save(fig, out_dir, "08_resource_count_scatter.png")
 
 
@@ -441,14 +487,15 @@ def plot_https_adoption(df: pd.DataFrame, out_dir: str) -> None:
     group = df.groupby("site_category")["https_ratio"].mean().sort_values(ascending=True)
     if group.empty:
         return
-    zh_labels = [_zh(c) for c in group.index]
+    n_map = df.groupby("site_category").size()
+    zh_labels = [f"{_zh(c)}  (n={n_map.get(c, 0)})" for c in group.index]
     colors = ["#2a9d8f" if v >= 0.9 else "#f4a261" if v >= 0.7 else "#e63946"
               for v in group.values]
     fig, ax = plt.subplots(figsize=(10, max(5, len(group) * 0.6)))
     bars = ax.barh(zh_labels, group.values * 100, color=colors, edgecolor="white", linewidth=0.8)
     ax.set_xlim(0, 115)
     ax.set_xlabel("HTTPS 资源占比 (%)")
-    ax.set_title("各行业 HTTPS 资源采用率")
+    ax.set_title("各行业 HTTPS 资源采用率（括号内为样本量）")
     for bar, v in zip(bars, group.values):
         ax.text(v * 100 + 1.5, bar.get_y() + bar.get_height() / 2,
                 f"{v * 100:.0f}%", va="center", fontsize=9)
@@ -591,6 +638,77 @@ def plot_vuln_by_industry(df_vuln: pd.DataFrame, df_clean: pd.DataFrame, out_dir
     _save(fig, out_dir, "17_vuln_by_industry.png")
 
 
+def plot_crawl_status_breakdown(df_raw: pd.DataFrame, out_dir: str) -> None:
+    """Stacked bar: ok / partial / timeout / error counts per industry."""
+    if "site_category" not in df_raw.columns:
+        return
+    status_order = ["ok", "partial", "timeout", "error"]
+    status_zh    = {"ok": "成功", "partial": "部分加载", "timeout": "超时", "error": "错误"}
+    status_colors = {"ok": "#2a9d8f", "partial": "#f4a261", "timeout": "#e9c46a", "error": "#e63946"}
+
+    counts = (
+        df_raw.groupby(["site_category", "status"])
+        .size()
+        .unstack(fill_value=0)
+        .reindex(columns=[s for s in status_order if s in df_raw["status"].unique()], fill_value=0)
+    )
+    totals = counts.sum(axis=1)
+    counts = counts.loc[counts.index.isin(SITE_CATS + ["unknown"])]
+    totals = totals[counts.index]
+    # sort by total descending
+    counts = counts.loc[totals.sort_values(ascending=False).index]
+    totals = totals[counts.index]
+
+    zh_index = [f"{_zh(c)}  (n={int(totals[c])})" for c in counts.index]
+    fig, ax = plt.subplots(figsize=(12, max(5, len(counts) * 0.6)))
+    lefts = np.zeros(len(counts))
+    for status in [s for s in status_order if s in counts.columns]:
+        vals = counts[status].values
+        ax.barh(zh_index, vals, left=lefts,
+                color=status_colors[status], label=status_zh[status],
+                edgecolor="white", linewidth=0.5)
+        for j, (v, l) in enumerate(zip(vals, lefts)):
+            if v > 0:
+                ax.text(l + v / 2, j, str(int(v)), ha="center", va="center",
+                        fontsize=7, color="white", fontweight="medium")
+        lefts += vals
+    ax.set_xlabel("站点数量")
+    ax.set_title("各行业爬取结果状态分布（括号内为总爬取数）")
+    ax.legend(frameon=False, fontsize=8, loc="lower right", title="爬取状态")
+    _save(fig, out_dir, "18_crawl_status_breakdown.png")
+
+
+def plot_mean_vs_median(df: pd.DataFrame, out_dir: str) -> None:
+    """Paired bar: mean vs median total_resources per industry, to surface skew."""
+    if "site_category" not in df.columns:
+        return
+    g = df.groupby("site_category")["total_resources"].agg(["mean", "median", "count"])
+    g = g.loc[g.index.isin(SITE_CATS + ["unknown"])]
+    g = g.sort_values("mean", ascending=False)
+    if g.empty:
+        return
+    zh_index = [f"{_zh(c)}\n(n={int(g.loc[c,'count'])})" for c in g.index]
+    x = np.arange(len(g))
+    width = 0.38
+    fig, ax = plt.subplots(figsize=(13, 5))
+    ax.bar(x - width / 2, g["mean"].values, width,
+           label="均值", color="#457b9d", edgecolor="white", linewidth=0.6)
+    ax.bar(x + width / 2, g["median"].values, width,
+           label="中位数", color="#e63946", edgecolor="white", linewidth=0.6, alpha=0.85)
+    # annotate ratio
+    for i, (mean_v, med_v) in enumerate(zip(g["mean"].values, g["median"].values)):
+        if med_v > 0:
+            ratio = mean_v / med_v
+            ax.text(i, max(mean_v, med_v) * 1.04, f"×{ratio:.0f}",
+                    ha="center", fontsize=7, color="#555555")
+    ax.set_xticks(x)
+    ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=9)
+    ax.set_ylabel("资源总数")
+    ax.set_title("各行业资源数均值 vs 中位数（标注倍数差距，反映分布偏态）")
+    ax.legend(frameon=False, fontsize=9)
+    _save(fig, out_dir, "19_mean_vs_median.png")
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -602,7 +720,7 @@ def main() -> None:
     parser.add_argument("--vuln-input",  default="data/vulns.csv",
                         help="Vulnerability scan CSV (output of 'process')")
     parser.add_argument("--urls-file",   default="urls.txt")
-    parser.add_argument("--output-dir",  default="data/charts")
+    parser.add_argument("--output-dir",  default="plot")
     args = parser.parse_args()
 
     apply_style()
@@ -652,11 +770,16 @@ def main() -> None:
     if os.path.exists(args.raw_results):
         df_raw = pd.read_csv(args.raw_results)
         df_raw = _add_site_category(df_raw, args.urls_file)
+        # Mark ok-but-thin sites as partial so the status breakdown reflects reality
+        thin_mask = (df_raw["status"] == "ok") & (df_raw["total_resources"] < 10)
+        df_raw.loc[thin_mask, "status"] = "partial"
         plot_crawl_success_by_industry(df_raw, args.output_dir)
+        plot_crawl_status_breakdown(df_raw, args.output_dir)
     plot_resource_mix_by_industry(df, args.output_dir)
     plot_tp_load_by_industry(df, args.output_dir)
     plot_script_ratio_boxplot(df, args.output_dir)
     plot_resource_count_scatter(df, args.output_dir)
+    plot_mean_vs_median(df, args.output_dir)
 
     # Domains
     plot_top_domains_global(df, args.output_dir)

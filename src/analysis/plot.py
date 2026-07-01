@@ -92,7 +92,7 @@ def plot_heatmap(df: pd.DataFrame, out_dir: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plot overview charts")
     parser.add_argument("--input", default="data/results_clean.csv")
-    parser.add_argument("--output-dir", default="data/charts")
+    parser.add_argument("--output-dir", default="plot")
     args = parser.parse_args()
 
     apply_style()

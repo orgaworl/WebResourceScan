@@ -98,13 +98,13 @@ uv run process
 uv run plot
 ```
 
-从 `data/results_clean.csv` 生成全部 12 张图表，保存到 `data/charts/`。
+从 `data/results_clean.csv` 生成全部 12 张图表，保存到 `plot/`。
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
 | `--input` | `data/results_clean.csv` | 清洗后的数据文件 |
 | `--raw-results` | `data/results.csv` | 含全部状态的原始汇总（用于成功率图） |
-| `--output-dir` | `data/charts` | 图表输出目录 |
+| `--output-dir` | `plot` | 图表输出目录 |
 
 **概览图（3张）**
 | 文件 | 说明 |

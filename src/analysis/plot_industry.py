@@ -38,13 +38,13 @@ def plot_crawl_success_by_industry(df_raw: pd.DataFrame, out_dir: str) -> None:
     ax.set_title("Crawl Success Rate by Site Category")
     for bar, v in zip(bars, grouped.values):
         ax.text(v + 1, bar.get_y() + bar.get_height() / 2,
-                f"{v:.0f}%", va="center", fontsize=8)
+                f"{v:.0f}%", va="center", fontsize=10)
     patches = [
         mpatches.Patch(color="#2a9d8f", label="≥ 70%"),
         mpatches.Patch(color="#f4a261", label="40–70%"),
         mpatches.Patch(color="#e63946", label="< 40%"),
     ]
-    ax.legend(handles=patches, frameon=False, fontsize=8)
+    ax.legend(handles=patches, frameon=False, fontsize=10)
     fig.savefig(os.path.join(out_dir, "crawl_success_rate.png"))
     plt.close(fig)
     print("Saved crawl_success_rate.png")
@@ -66,14 +66,14 @@ def plot_resource_mix_by_industry(df: pd.DataFrame, out_dir: str) -> None:
         ax.barh(pct.index, vals, left=lefts, color=RES_COLORS[i],
                 label=label, edgecolor="white", linewidth=0.5)
         for j, (v, l) in enumerate(zip(vals, lefts)):
-            if v > 5:
+            if v > 8:
                 ax.text(l + v / 2, j, f"{v:.0f}%", ha="center", va="center",
-                        fontsize=7, color="white", fontweight="bold")
+                        fontsize=9, color="white", fontweight="bold")
         lefts += vals
     ax.set_xlim(0, 100)
     ax.set_xlabel("Resource Mix (%)")
     ax.set_title("Resource Type Composition by Site Category")
-    ax.legend(loc="lower right", frameon=False, fontsize=8, ncol=4)
+    ax.legend(loc="lower right", frameon=False, fontsize=10, ncol=4)
     fig.savefig(os.path.join(out_dir, "resource_mix_by_industry.png"))
     plt.close(fig)
     print("Saved resource_mix_by_industry.png")
@@ -101,7 +101,7 @@ def plot_tp_load_by_industry(df: pd.DataFrame, out_dir: str) -> None:
     ax.set_xticklabels(group.index, rotation=30, ha="right")
     ax.set_ylabel("Mean Domain Count per Site")
     ax.set_title("Third-Party Domain Load by Site Category")
-    ax.legend(frameon=False, fontsize=8, ncol=3)
+    ax.legend(frameon=False, fontsize=10, ncol=3)
     fig.savefig(os.path.join(out_dir, "tp_load_by_industry.png"))
     plt.close(fig)
     print("Saved tp_load_by_industry.png")
@@ -135,7 +135,7 @@ def plot_script_ratio_boxplot(df: pd.DataFrame, out_dir: str) -> None:
     # Annotate medians
     for i, d in enumerate(data):
         med = float(np.median(d))
-        ax.text(i + 1, med + 0.03, f"{med:.2f}", ha="center", fontsize=7, color="#333333")
+        ax.text(i + 1, med + 0.03, f"{med:.2f}", ha="center", fontsize=9, color="#333333")
     fig.savefig(os.path.join(out_dir, "script_ratio_boxplot.png"))
     plt.close(fig)
     print("Saved script_ratio_boxplot.png")
@@ -165,7 +165,7 @@ def plot_resource_count_scatter(df: pd.DataFrame, out_dir: str) -> None:
     ax.set_title("Resource Count Distribution by Site Category  (◆ = mean)")
     # Add color legend
     handles = [mpatches.Patch(color=CATEGORY_COLORS.get(c, "#aaaaaa"), label=c) for c in cats]
-    ax.legend(handles=handles, frameon=False, fontsize=7, ncol=3, loc="upper right")
+    ax.legend(handles=handles, frameon=False, fontsize=9, ncol=3, loc="upper right")
     fig.savefig(os.path.join(out_dir, "resource_count_scatter.png"))
     plt.close(fig)
     print("Saved resource_count_scatter.png")

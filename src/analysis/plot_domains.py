@@ -63,12 +63,12 @@ def plot_top_domains_global(df: pd.DataFrame, out_dir: str, n: int = 25) -> None
     ax.barh(range(len(top)), top.values[::-1], color=colors[::-1],
             edgecolor="white", linewidth=0.5)
     ax.set_yticks(range(len(top)))
-    ax.set_yticklabels(top.index[::-1], fontsize=8)
+    ax.set_yticklabels(top.index[::-1], fontsize=10)
     ax.set_xlabel("Number of Sites Containing Domain")
     ax.set_title(f"Top {n} Third-Party Domains by Site Presence")
     # Domain category legend
     legend_handles = [mpatches.Patch(color=c, label=cat) for cat, c in DOMAIN_CAT_COLORS.items()]
-    ax.legend(handles=legend_handles, frameon=False, fontsize=8, loc="lower right")
+    ax.legend(handles=legend_handles, frameon=False, fontsize=10, loc="lower right")
     fig.savefig(os.path.join(out_dir, "top_tp_domains.png"))
     plt.close(fig)
     print("Saved top_tp_domains.png")
@@ -109,9 +109,9 @@ def plot_domain_presence_heatmap(df: pd.DataFrame, out_dir: str, n: int = 20) ->
     fig, ax = plt.subplots(figsize=(max(10, len(cats) * 1.1), max(6, n * 0.45)))
     im = ax.imshow(matrix, aspect="auto", cmap="YlOrRd", vmin=0, vmax=100)
     ax.set_xticks(range(len(cats)))
-    ax.set_xticklabels(cats, rotation=35, ha="right", fontsize=9)
+    ax.set_xticklabels(cats, rotation=35, ha="right", fontsize=11)
     ax.set_yticks(range(len(top_domains)))
-    ax.set_yticklabels(top_domains, fontsize=8)
+    ax.set_yticklabels(top_domains, fontsize=10)
     ax.set_title(f"Top {n} Third-Party Domains: Presence Rate by Site Category (%)")
     # Annotate cells > 15%
     for di in range(len(top_domains)):
@@ -119,7 +119,7 @@ def plot_domain_presence_heatmap(df: pd.DataFrame, out_dir: str, n: int = 20) ->
             v = matrix[di, ci]
             if v > 15:
                 ax.text(ci, di, f"{v:.0f}", ha="center", va="center",
-                        fontsize=7, color="black" if v < 60 else "white")
+                        fontsize=9, color="black" if v < 60 else "white")
     fig.colorbar(im, ax=ax, label="% of Sites", shrink=0.6)
     fig.savefig(os.path.join(out_dir, "domain_presence_heatmap.png"))
     plt.close(fig)
@@ -157,14 +157,14 @@ def plot_tp_count_vs_resources_bubble(df: pd.DataFrame, out_dir: str) -> None:
     # Category legend
     cat_list = sorted(set(cats))
     cat_handles = [mpatches.Patch(color=CATEGORY_COLORS.get(c, "#aaaaaa"), label=c) for c in cat_list]
-    leg1 = ax.legend(handles=cat_handles, frameon=False, fontsize=7, loc="upper left",
-                     title="Site Category", title_fontsize=8, ncol=2)
+    leg1 = ax.legend(handles=cat_handles, frameon=False, fontsize=9, loc="upper left",
+                     title="Site Category", title_fontsize=10, ncol=2)
     ax.add_artist(leg1)
 
     # Size legend
     for sr, label in [(0.1, "10%"), (0.5, "50%"), (1.0, "100%")]:
         ax.scatter([], [], s=sr * 300, color="#888888", alpha=0.6, label=f"Script ratio {label}")
-    ax.legend(frameon=False, fontsize=7, loc="lower right", title="Script Ratio", title_fontsize=8)
+    ax.legend(frameon=False, fontsize=9, loc="lower right", title="Script Ratio", title_fontsize=10)
 
     fig.savefig(os.path.join(out_dir, "tp_bubble.png"))
     plt.close(fig)
@@ -205,9 +205,9 @@ def plot_domain_ubiquity_histogram(df: pd.DataFrame, out_dir: str) -> None:
     single_site = (scores == 1).sum()
     pct_single = single_site / len(scores) * 100
     ax.text(0.98, 0.95, f"{pct_single:.0f}% of domains\nappear on only 1 site",
-            transform=ax.transAxes, ha="right", va="top", fontsize=9, color="#555555")
+            transform=ax.transAxes, ha="right", va="top", fontsize=11, color="#555555")
 
-    ax.legend(frameon=False, fontsize=8)
+    ax.legend(frameon=False, fontsize=10)
     fig.savefig(os.path.join(out_dir, "domain_ubiquity_hist.png"))
     plt.close(fig)
     print("Saved domain_ubiquity_hist.png")

@@ -9,7 +9,6 @@ from .classifier import DomainClassifier
 from .raw_io import read_raw, RAW_COLUMNS
 from .reporter import build_row, CSV_COLUMNS
 from .analysis.categories import build_site_category_map, get_site_category
-from .analysis.vulns import scan_raw_dir, write_vulns
 
 import pandas as pd
 
@@ -146,22 +145,12 @@ def main():
                         help="Sites with fewer resources are marked partial and excluded (default: 10)")
     parser.add_argument("--skip-aggregate", action="store_true",
                         help="Skip re-aggregation, only run clean on existing --results file")
-    parser.add_argument("--vuln-output", default="data/vulns.csv",
-                        help="Output path for vulnerability scan results (default: data/vulns.csv)")
-    parser.add_argument("--skip-vuln", action="store_true",
-                        help="Skip vulnerability scan")
     args = parser.parse_args()
 
     if not args.skip_aggregate:
         _aggregate(args.raw_dir, args.results)
 
     _clean(args.results, args.output, args.urls_file, min_resources=args.min_resources)
-
-    if not args.skip_vuln:
-        print("Scanning for known-vulnerable JS libraries...")
-        vuln_results = scan_raw_dir(args.raw_dir)
-        write_vulns(vuln_results, args.vuln_output)
-        print(f"Vulnerability scan: {len(vuln_results)} findings → {args.vuln_output}")
 
 
 if __name__ == "__main__":

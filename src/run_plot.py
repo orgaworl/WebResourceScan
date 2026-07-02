@@ -73,9 +73,14 @@ def _zh(cat: str) -> str:
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _save(fig: plt.Figure, out_dir: str, name: str) -> None:
-    fig.savefig(os.path.join(out_dir, name), bbox_inches="tight")
+    for ax in fig.axes:
+        ax.set_title("")
+    # Strip any .png suffix so callers can pass either .png or .pdf names
+    stem = name.removesuffix(".png").removesuffix(".pdf")
+    path = os.path.join(out_dir, stem + ".pdf")
+    fig.savefig(path, bbox_inches="tight", format="pdf")
     plt.close(fig)
-    print(f"Saved {name}")
+    print(f"Saved {stem}.pdf")
 
 
 def _add_site_category(df: pd.DataFrame, urls_file: str) -> pd.DataFrame:
@@ -102,6 +107,35 @@ def _explode_domains(df: pd.DataFrame) -> "Counter":
     return counter
 
 
+def select_top_industries(
+    df_raw: pd.DataFrame, top_n: int = 5, min_resources: int = 10
+) -> list[str]:
+    """Rank industries by the share of crawls that are usable for analysis."""
+    required = {"site_category", "status", "total_resources"}
+    missing = required.difference(df_raw.columns)
+    if missing:
+        raise ValueError(f"Missing columns for industry selection: {sorted(missing)}")
+
+    ranked = df_raw.copy()
+    ranked["_analyzable"] = (
+        (ranked["status"] == "ok")
+        & (ranked["total_resources"].fillna(0) >= min_resources)
+    )
+    summary = ranked.groupby("site_category").agg(
+        successful=("_analyzable", "sum"),
+        total=("_analyzable", "size"),
+    )
+    summary["success_rate"] = summary["successful"] / summary["total"]
+    summary = (
+        summary.reset_index()
+        .sort_values(
+            ["success_rate", "successful", "site_category"],
+            ascending=[False, False, True],
+        )
+    )
+    return summary.head(top_n)["site_category"].tolist()
+
+
 # ── Overview charts ───────────────────────────────────────────────────────────
 
 def plot_resource_category_donut(df: pd.DataFrame, out_dir: str) -> None:
@@ -123,7 +157,7 @@ def plot_resource_category_donut(df: pd.DataFrame, out_dir: str) -> None:
             fontsize=12, fontweight="semibold")
     ax.legend(wedges, labels, loc="lower center", bbox_to_anchor=(0.5, -0.08),
               frameon=False, fontsize=9, ncol=4)
-    ax.set_title("第三方域名行业类别占比（所有站点）", pad=12)
+    ax.set_title("成功率前5行业：第三方资源服务类别占比", pad=12)
     _save(fig, out_dir, "01_resource_category_donut.png")
 
 
@@ -141,7 +175,7 @@ def plot_resource_bar(df: pd.DataFrame, out_dir: str) -> None:
                 f"{pct:.1f}%", ha="center", va="bottom", fontsize=9, color="#444444")
     ax.set_xlabel("资源类型")
     ax.set_ylabel("资源总数")
-    ax.set_title("各资源类型分布（所有站点汇总）")
+    ax.set_title("成功率前5行业：整体资源类型占比")
     ax.set_ylim(0, totals.max() * 1.15)
     _save(fig, out_dir, "02_resource_bar.png")
 
@@ -164,14 +198,16 @@ def plot_heatmap(df: pd.DataFrame, out_dir: str) -> None:
     ax.set_xticklabels(CAT_LABELS, rotation=30, ha="right", fontsize=9)
     ax.set_yticks(range(n_rows))
     ax.set_yticklabels([u.split("//")[-1].split("/")[0] for u in heat_df.index], fontsize=6)
-    ax.set_title("各站点第三方域名类别数量热力图（颜色 = log(1+x) 变换）")
+    ax.set_title("成功率前5行业：各站点第三方资源类别数量")
     fig.colorbar(im, ax=ax, label="log(1+域名数)", shrink=0.6, pad=0.02)
     _save(fig, out_dir, "03_url_heatmap.png")
 
 
 # ── Industry charts ───────────────────────────────────────────────────────────
 
-def plot_crawl_success_by_industry(df_raw: pd.DataFrame, out_dir: str) -> None:
+def plot_crawl_success_by_industry(
+    df_raw: pd.DataFrame, out_dir: str, top_industries: list[str]
+) -> None:
     if "site_category" not in df_raw.columns:
         return
     # "ok" means status==ok AND total_resources>=10; partial already applied upstream
@@ -182,20 +218,23 @@ def plot_crawl_success_by_industry(df_raw: pd.DataFrame, out_dir: str) -> None:
         lambda s: f"{(s == 'ok').sum()}/{len(s)}"
     )
     zh_labels = [f"{_zh(c)}  ({counts[c]})" for c in grouped.index]
-    colors = ["#2a9d8f" if v >= 70 else "#f4a261" if v >= 40 else "#e63946"
-              for v in grouped.values]
+    colors = [
+        "#2a9d8f" if category in top_industries else "#b8c0cc"
+        for category in grouped.index
+    ]
     fig, ax = plt.subplots(figsize=(10, max(5, len(grouped) * 0.6)))
     bars = ax.barh(zh_labels, grouped.values, color=colors, edgecolor="white", linewidth=0.8)
-    ax.set_xlim(0, 115)
+    ax.set_xlim(0, max(30, float(grouped.max()) * 1.25))
     ax.set_xlabel("爬取成功率 (%)")
-    ax.set_title("各行业爬取成功率（括号内为 有效/总爬取 数）")
+    ax.set_title("各行业有效爬取成功率及前5行业筛选结果")
     for bar, v in zip(bars, grouped.values):
         ax.text(v + 1.5, bar.get_y() + bar.get_height() / 2,
                 f"{v:.0f}%", va="center", fontsize=9)
-    patches = [mpatches.Patch(color="#2a9d8f", label="≥ 70%"),
-               mpatches.Patch(color="#f4a261", label="40–70%"),
-               mpatches.Patch(color="#e63946", label="< 40%")]
-    ax.legend(handles=patches, frameon=False, fontsize=8, loc="lower right", title="成功率区间")
+    patches = [
+        mpatches.Patch(color="#2a9d8f", label="入选前5行业"),
+        mpatches.Patch(color="#b8c0cc", label="其余行业"),
+    ]
+    ax.legend(handles=patches, frameon=False, fontsize=8, loc="lower right")
     _save(fig, out_dir, "04_crawl_success_rate.png")
 
 
@@ -222,7 +261,7 @@ def plot_resource_mix_by_industry(df: pd.DataFrame, out_dir: str) -> None:
         lefts += vals
     ax.set_xlim(0, 100)
     ax.set_xlabel("资源类型占比 (%)")
-    ax.set_title("各行业资源类型构成（均值，括号内为样本量）")
+    ax.set_title("成功率前5行业：资源类型构成对比（括号内为样本量）")
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.22),
               frameon=False, fontsize=8, ncol=4)
     _save(fig, out_dir, "05_resource_mix_by_industry.png")
@@ -262,7 +301,7 @@ def plot_tp_load_by_industry(df: pd.DataFrame, out_dir: str) -> None:
     ax.set_xticks(x)
     ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=9)
     ax.set_ylabel("每站点域名数（中位数，误差棒=IQR）")
-    ax.set_title("各行业第三方域名加载量——中位数对比（括号内为样本量）")
+    ax.set_title("成功率前5行业：第三方资源类别加载量对比")
     ax.legend(loc="upper right", frameon=False, fontsize=8, ncol=4)
     _save(fig, out_dir, "06_tp_load_by_industry.png")
 
@@ -288,7 +327,7 @@ def plot_script_ratio_boxplot(df: pd.DataFrame, out_dir: str) -> None:
     ax.set_xticklabels(zh_labels, rotation=30, ha="right", fontsize=9)
     ax.set_ylabel("脚本密度（脚本+XHR / 总资源）")
     ax.set_ylim(-0.05, 1.15)
-    ax.set_title("各行业脚本/XHR 密度分布（括号内为样本量）")
+    ax.set_title("成功率前5行业：脚本/XHR密度分布")
     for i, d in enumerate(data):
         med = float(np.median(d))
         ax.text(i + 1, med + 0.05, f"{med:.2f}", ha="center", fontsize=7, color="#333333")
@@ -327,7 +366,7 @@ def plot_resource_count_scatter(df: pd.DataFrame, out_dir: str) -> None:
     ax.set_xticks(range(len(cats)))
     ax.set_xticklabels(zh_labels, rotation=35, ha="right", fontsize=9)
     ax.set_ylabel("log₁₀(总资源数)")
-    ax.set_title("各行业站点资源数分布（▲=均值，◆=中位数，两者差距反映分布偏态）")
+    ax.set_title("成功率前5行业：站点资源规模分布（▲=均值，◆=中位数）")
     # legend: categories + mean/median markers
     cat_handles = [mpatches.Patch(color=CATEGORY_COLORS.get(c, "#aaaaaa"), label=_zh(c)) for c in cats]
     marker_handles = [
@@ -400,7 +439,7 @@ def plot_domain_presence_heatmap(df: pd.DataFrame, out_dir: str, n: int = 20) ->
     ax.set_xticklabels(zh_cats, rotation=35, ha="right", fontsize=9)
     ax.set_yticks(range(len(top_domains)))
     ax.set_yticklabels(top_domains, fontsize=8)
-    ax.set_title(f"前 {n} 个第三方域名在各行业的覆盖率 (%)")
+    ax.set_title(f"成功率前5行业：高频第三方域名覆盖率 Top {n}")
     for di in range(len(top_domains)):
         for ci in range(len(cats)):
             v = matrix[di, ci]
@@ -433,7 +472,7 @@ def plot_tp_count_vs_resources_bubble(df: pd.DataFrame, out_dir: str) -> None:
     ax.scatter(x, y, s=sizes, c=colors, alpha=0.75, edgecolors="white", linewidth=0.5)
     ax.set_xlabel("log₁₀(总资源数)")
     ax.set_ylabel("第三方域名数量（去重）")
-    ax.set_title("资源总数 vs 第三方域名数（气泡大小 = 脚本密度）")
+    ax.set_title("成功率前5行业：资源总数与第三方域名数")
     cat_list = sorted(set(cats))
     cat_handles = [mpatches.Patch(color=CATEGORY_COLORS.get(c, "#aaaaaa"), label=_zh(c))
                    for c in cat_list]
@@ -495,7 +534,7 @@ def plot_https_adoption(df: pd.DataFrame, out_dir: str) -> None:
     bars = ax.barh(zh_labels, group.values * 100, color=colors, edgecolor="white", linewidth=0.8)
     ax.set_xlim(0, 115)
     ax.set_xlabel("HTTPS 资源占比 (%)")
-    ax.set_title("各行业 HTTPS 资源采用率（括号内为样本量）")
+    ax.set_title("成功率前5行业：HTTPS资源采用率")
     for bar, v in zip(bars, group.values):
         ax.text(v * 100 + 1.5, bar.get_y() + bar.get_height() / 2,
                 f"{v * 100:.0f}%", va="center", fontsize=9)
@@ -534,7 +573,7 @@ def plot_privacy_risk(df: pd.DataFrame, out_dir: str) -> None:
                         fontweight="medium")
         lefts += vals
     ax.set_xlabel("隐私相关资源占比 (%)")
-    ax.set_title("各行业隐私风险资源构成（广告 + 分析 + 社交）")
+    ax.set_title("成功率前5行业：隐私相关资源构成")
     ax.legend(frameon=False, fontsize=8, loc="lower right", ncol=3)
     _save(fig, out_dir, "14_privacy_risk_by_industry.png")
 
@@ -557,7 +596,7 @@ def plot_resource_origin(df: pd.DataFrame, out_dir: str) -> None:
     ax.set_xticks(x)
     ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=9)
     ax.set_ylabel("资源占比 (%)")
-    ax.set_title("各行业资源来源构成（第一方 vs 第三方）")
+    ax.set_title("成功率前5行业：第一方与第三方资源占比")
     ax.legend(frameon=False, fontsize=9)
     _save(fig, out_dir, "15_resource_origin_by_industry.png")
 
@@ -630,7 +669,7 @@ def plot_vuln_by_industry(df_vuln: pd.DataFrame, df_clean: pd.DataFrame, out_dir
                    color="#7b2d8b", edgecolor="white", linewidth=0.8, alpha=0.85)
     ax.set_xlim(0, 110)
     ax.set_xlabel("含已知漏洞库的站点占比 (%)")
-    ax.set_title("各行业前端库漏洞覆盖率")
+    ax.set_title("成功率前5行业：前端库漏洞覆盖率")
     for bar, (_, row) in zip(bars, group.iterrows()):
         ax.text(row["pct"] + 1.5, bar.get_y() + bar.get_height() / 2,
                 f"{row['pct']:.0f}%  ({int(row['vuln'])}/{int(row['total'])})",
@@ -704,7 +743,7 @@ def plot_mean_vs_median(df: pd.DataFrame, out_dir: str) -> None:
     ax.set_xticks(x)
     ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=9)
     ax.set_ylabel("资源总数")
-    ax.set_title("各行业资源数均值 vs 中位数（标注倍数差距，反映分布偏态）")
+    ax.set_title("成功率前5行业：资源数均值与中位数")
     ax.legend(frameon=False, fontsize=9)
     _save(fig, out_dir, "19_mean_vs_median.png")
 
@@ -761,25 +800,39 @@ def main() -> None:
             total = df["total_resources"].replace(0, float("nan"))
             df["privacy_score"] = (df[privacy_cols].sum(axis=1) / total).fillna(0)
 
-    # Overview
-    plot_resource_category_donut(df, args.output_dir)
-    plot_resource_bar(df, args.output_dir)
-    plot_heatmap(df, args.output_dir)
+    if not os.path.exists(args.raw_results):
+        raise FileNotFoundError(
+            f"Raw results are required to select the top industries: {args.raw_results}"
+        )
 
-    # Industry
-    if os.path.exists(args.raw_results):
-        df_raw = pd.read_csv(args.raw_results)
-        df_raw = _add_site_category(df_raw, args.urls_file)
-        # Mark ok-but-thin sites as partial so the status breakdown reflects reality
-        thin_mask = (df_raw["status"] == "ok") & (df_raw["total_resources"] < 10)
-        df_raw.loc[thin_mask, "status"] = "partial"
-        plot_crawl_success_by_industry(df_raw, args.output_dir)
-        plot_crawl_status_breakdown(df_raw, args.output_dir)
+    df_raw = pd.read_csv(args.raw_results)
+    df_raw = _add_site_category(df_raw, args.urls_file)
+    top_industries = select_top_industries(df_raw, top_n=5, min_resources=10)
+    print(f"Top 5 industries by analyzable crawl rate: {top_industries}")
+
+    # Mark ok-but-thin sites as partial so both crawl figures use the same
+    # definition of an analyzable crawl.
+    thin_mask = (df_raw["status"] == "ok") & (df_raw["total_resources"] < 10)
+    df_raw.loc[thin_mask, "status"] = "partial"
+    plot_crawl_success_by_industry(df_raw, args.output_dir, top_industries)
+    plot_crawl_status_breakdown(df_raw, args.output_dir)
+
+    # Every detailed analysis below uses only the five industries selected
+    # from the full crawl attempt set.
+    df = df[df["site_category"].isin(top_industries)].copy()
+
+    # Overall composition of the selected industries
+    plot_resource_bar(df, args.output_dir)
+    plot_resource_category_donut(df, args.output_dir)
+
+    # Cross-industry comparison
     plot_resource_mix_by_industry(df, args.output_dir)
-    plot_tp_load_by_industry(df, args.output_dir)
-    plot_script_ratio_boxplot(df, args.output_dir)
     plot_resource_count_scatter(df, args.output_dir)
     plot_mean_vs_median(df, args.output_dir)
+    plot_resource_origin(df, args.output_dir)
+    plot_heatmap(df, args.output_dir)
+    plot_tp_load_by_industry(df, args.output_dir)
+    plot_script_ratio_boxplot(df, args.output_dir)
 
     # Domains
     plot_top_domains_global(df, args.output_dir)
@@ -790,11 +843,11 @@ def main() -> None:
     # Security & composition
     plot_https_adoption(df, args.output_dir)
     plot_privacy_risk(df, args.output_dir)
-    plot_resource_origin(df, args.output_dir)
 
     # Vulnerability analysis
     if os.path.exists(args.vuln_input):
         df_vuln = pd.read_csv(args.vuln_input)
+        df_vuln = df_vuln[df_vuln["site_url"].isin(df["url"])]
         plot_vuln_by_library(df_vuln, args.output_dir)
         plot_vuln_by_industry(df_vuln, df, args.output_dir)
     else:

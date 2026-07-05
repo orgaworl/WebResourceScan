@@ -16,10 +16,10 @@ except ImportError:
     def classify_domain(d: str) -> str:  # type: ignore[misc]
         return "other"
 
-CAT_COLS   = ["cat_gambling", "cat_gaming", "cat_ad", "cat_analytics",
+CAT_COLS   = ["cat_ad", "cat_analytics",
               "cat_social", "cat_payment", "cat_cdn", "cat_other"]
 RES_COLS   = ["res_script", "res_stylesheet", "res_image", "res_media", "res_font", "res_xhr", "res_other"]
-CAT_LABELS = ["博彩", "游戏", "广告", "分析/监测", "社交", "支付", "CDN", "其他"]
+CAT_LABELS = ["广告", "分析/监测", "社交", "支付", "CDN", "其他"]
 RES_LABELS = ["脚本", "样式表", "图片", "媒体", "字体", "XHR", "其他"]
 SITE_CATS  = ["gambling", "gaming", "esports", "crypto", "payment", "ad-tech",
                "social", "news", "ecommerce", "adult", "cdn-infra", "streaming", "reference"]
@@ -55,8 +55,6 @@ DOMAIN_CAT_ZH: dict[str, str] = {
 
 
 CAT_COL_COLORS = [
-    DOMAIN_CAT_COLORS.get("gambling"),   # cat_gambling
-    DOMAIN_CAT_COLORS.get("gaming"),     # cat_gaming
     DOMAIN_CAT_COLORS.get("ad"),         # cat_ad
     DOMAIN_CAT_COLORS.get("analytics"),  # cat_analytics
     DOMAIN_CAT_COLORS.get("social"),     # cat_social
@@ -164,7 +162,7 @@ def plot_resource_category_donut(df: pd.DataFrame, out_dir: str) -> None:
             # label inside the donut ring
             rx, ry = 0.75 * cos_a, 0.75 * sin_a
             ax.text(rx, ry, f"{pct:.1f}%", ha="center", va="center",
-                    fontsize=10, color="white", fontweight="medium")
+                    fontsize=12, color="white", fontweight="medium")
         else:
             # label outside with a leader line
             r_inner = 1.05   # start of line (just outside pie)
@@ -175,16 +173,16 @@ def plot_resource_category_donut(df: pd.DataFrame, out_dir: str) -> None:
                 xytext=(r_outer * cos_a, r_outer * sin_a),
                 ha="center" if abs(cos_a) < 0.1 else ("left" if cos_a > 0 else "right"),
                 va="center",
-                fontsize=9,
+                fontsize=11,
                 color="#333333",
                 arrowprops=dict(arrowstyle="-", color="#888888", lw=0.8,
                                 connectionstyle="arc3,rad=0"),
             )
 
     ax.text(0, 0, f"合计\n{int(grand)}", ha="center", va="center",
-            fontsize=12, fontweight="semibold")
+            fontsize=14, fontweight="semibold")
     ax.legend(wedges, labels, loc="lower center", bbox_to_anchor=(0.5, -0.08),
-              frameon=False, fontsize=11, ncol=4)
+              frameon=False, fontsize=13, ncol=4)
     ax.set_title("成功率前5行业：第三方资源服务类别占比", pad=12)
     _save(fig, out_dir, "01_resource_category_donut.png")
 
@@ -200,7 +198,7 @@ def plot_resource_bar(df: pd.DataFrame, out_dir: str) -> None:
     for bar, v in zip(bars, totals.values):
         pct = v / grand_total * 100 if grand_total else 0
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + offset,
-                f"{pct:.1f}%", ha="center", va="bottom", fontsize=11, color="#444444")
+                f"{pct:.1f}%", ha="center", va="bottom", fontsize=13, color="#444444")
     ax.set_xlabel("资源类型")
     ax.set_ylabel("资源总数")
     ax.set_title("成功率前5行业：整体资源类型占比")
@@ -221,11 +219,11 @@ def plot_heatmap(df: pd.DataFrame, out_dir: str) -> None:
     heat_log = np.log1p(heat_df.values)
     n_rows = len(heat_df)
     fig, ax = plt.subplots(figsize=(max(10, len(CAT_COLS) * 1.8), max(8, n_rows * 0.38 + 2)))
-    im = ax.imshow(heat_log, aspect="auto", cmap="RdYlGn", vmin=0)
+    im = ax.imshow(heat_log, aspect="auto", cmap="YlOrRd", vmin=0)
     ax.set_xticks(range(len(CAT_LABELS)))
-    ax.set_xticklabels(CAT_LABELS, rotation=30, ha="right", fontsize=11)
+    ax.set_xticklabels(CAT_LABELS, rotation=30, ha="right", fontsize=13)
     ax.set_yticks(range(n_rows))
-    ax.set_yticklabels([u.split("//")[-1].split("/")[0] for u in heat_df.index], fontsize=9)
+    ax.set_yticklabels([u.split("//")[-1].split("/")[0] for u in heat_df.index], fontsize=11)
     ax.set_title("成功率前5行业：各站点第三方资源类别数量")
     fig.colorbar(im, ax=ax, label="log(1+域名数)", shrink=0.6, pad=0.02)
     _save(fig, out_dir, "03_url_heatmap.png")
@@ -257,12 +255,12 @@ def plot_crawl_success_by_industry(
     ax.set_title("各行业有效爬取成功率及前5行业筛选结果")
     for bar, v in zip(bars, grouped.values):
         ax.text(v + 1.5, bar.get_y() + bar.get_height() / 2,
-                f"{v:.0f}%", va="center", fontsize=11)
+                f"{v:.0f}%", va="center", fontsize=13)
     patches = [
         mpatches.Patch(color="#2a9d8f", label="入选前5行业"),
         mpatches.Patch(color="#b8c0cc", label="其余行业"),
     ]
-    ax.legend(handles=patches, frameon=False, fontsize=10, loc="lower right")
+    ax.legend(handles=patches, frameon=False, fontsize=12, loc="lower right")
     _save(fig, out_dir, "04_crawl_success_rate.png")
 
 
@@ -285,14 +283,13 @@ def plot_resource_mix_by_industry(df: pd.DataFrame, out_dir: str) -> None:
         for j, (v, l) in enumerate(zip(vals, lefts)):
             if v > 3:
                 ax.text(l + v / 2, j, f"{v:.0f}%", ha="center", va="center",
-                        fontsize=9, color="white", fontweight="medium")
+                        fontsize=11, color="white", fontweight="medium")
         lefts += vals
     ax.set_xlim(0, 100)
-    ax.set_xlabel("资源类型占比 (%)")
-    ax.set_title("成功率前5行业：资源类型构成对比（括号内为样本量）")
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.22),
-              frameon=False, fontsize=10, ncol=len(RES_COLS))
-    fig.subplots_adjust(bottom=0.18)
+    ax.tick_params(axis="y", labelsize=11)
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.32),
+              frameon=False, fontsize=12, ncol=len(RES_COLS))
+    fig.subplots_adjust(bottom=0.25, left=0.22)
     _save(fig, out_dir, "05_resource_mix_by_industry.png")
 
 
@@ -321,17 +318,13 @@ def plot_tp_load_by_industry(df: pd.DataFrame, out_dir: str) -> None:
         color = CAT_COL_COLORS[i]
         offset = (i - n_groups / 2 + 0.5) * width
         vals = med[col].values
-        err_lo = (med[col] - q25[col]).clip(lower=0).values
-        err_hi = (q75[col] - med[col]).clip(lower=0).values
         ax.bar(x + offset, vals, width, label=label, color=color,
                edgecolor="white", linewidth=0.5)
-        ax.errorbar(x + offset, vals, yerr=[err_lo, err_hi],
-                    fmt="none", color="#333333", linewidth=0.6, capsize=1.5)
     ax.set_xticks(x)
-    ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=11)
-    ax.set_ylabel("每站点域名数（中位数，误差棒=IQR）")
+    ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=13)
+    ax.set_ylabel("每站点域名数（中位数）")
     ax.set_title("成功率前5行业：第三方资源类别加载量对比")
-    ax.legend(loc="upper right", frameon=False, fontsize=10, ncol=4)
+    ax.legend(loc="upper right", frameon=False, fontsize=12, ncol=4)
     _save(fig, out_dir, "06_tp_load_by_industry.png")
 
 
@@ -353,13 +346,13 @@ def plot_script_ratio_boxplot(df: pd.DataFrame, out_dir: str) -> None:
         patch.set_facecolor(color)
         patch.set_alpha(0.8)
     ax.set_xticks(range(1, len(order) + 1))
-    ax.set_xticklabels(zh_labels, rotation=30, ha="right", fontsize=11)
+    ax.set_xticklabels(zh_labels, rotation=30, ha="right", fontsize=13)
     ax.set_ylabel("脚本密度（脚本+XHR / 总资源）")
     ax.set_ylim(-0.05, 1.15)
     ax.set_title("成功率前5行业：脚本/XHR密度分布")
     for i, d in enumerate(data):
         med = float(np.median(d))
-        ax.text(i + 1, med + 0.05, f"{med:.2f}", ha="center", fontsize=9, color="#333333")
+        ax.text(i + 1, med + 0.05, f"{med:.2f}", ha="center", fontsize=11, color="#333333")
     _save(fig, out_dir, "07_script_ratio_boxplot.png")
 
 
@@ -389,11 +382,11 @@ def plot_resource_count_scatter(df: pd.DataFrame, out_dir: str) -> None:
             lv = np.log10(max(row["total_resources"], 1))
             domain = row["url"].split("//")[-1].split("/")[0]
             ax.annotate(domain, (cat_idx[cat] + rng.uniform(-0.1, 0.1), lv),
-                        fontsize=9, color="#333333", ha="center",
+                        fontsize=11, color="#333333", ha="center",
                         xytext=(0, 6), textcoords="offset points")
     zh_labels = [f"{_zh(c)}\n(n={n_map.get(c,0)})" for c in cats]
     ax.set_xticks(range(len(cats)))
-    ax.set_xticklabels(zh_labels, rotation=35, ha="right", fontsize=11)
+    ax.set_xticklabels(zh_labels, rotation=35, ha="right", fontsize=13)
     ax.set_ylabel("log₁₀(总资源数)")
     ax.set_title("成功率前5行业：站点资源规模分布（▲=均值，◆=中位数）")
     # legend: categories + mean/median markers
@@ -402,10 +395,10 @@ def plot_resource_count_scatter(df: pd.DataFrame, out_dir: str) -> None:
         ax.scatter([], [], marker="^", color="black", s=55, label="均值"),
         ax.scatter([], [], marker="D", color="#e63946", s=45, label="中位数"),
     ]
-    leg1 = ax.legend(handles=cat_handles, frameon=False, fontsize=9, ncol=3,
+    leg1 = ax.legend(handles=cat_handles, frameon=False, fontsize=11, ncol=3,
                      loc="lower center", bbox_to_anchor=(0.5, -0.38), title="行业分类")
     ax.add_artist(leg1)
-    ax.legend(handles=marker_handles, frameon=False, fontsize=10, loc="upper right")
+    ax.legend(handles=marker_handles, frameon=False, fontsize=12, loc="upper right")
     _save(fig, out_dir, "08_resource_count_scatter.png")
 
 
@@ -427,12 +420,12 @@ def plot_top_domains_global(df: pd.DataFrame, out_dir: str, n: int = 25) -> None
     fig, ax = plt.subplots(figsize=(11, max(7, n * 0.34)))
     ax.barh(range(len(top)), top.values[::-1], color=colors[::-1], edgecolor="white", linewidth=0.5)
     ax.set_yticks(range(len(top)))
-    ax.set_yticklabels(top.index[::-1], fontsize=10)
+    ax.set_yticklabels(top.index[::-1], fontsize=12)
     ax.set_xlabel("包含该域名的站点数量")
     ax.set_title(f"第三方域名站点覆盖数 Top {n}")
     legend_handles = [mpatches.Patch(color=c, label=DOMAIN_CAT_ZH.get(cat, cat))
                       for cat, c in DOMAIN_CAT_COLORS.items()]
-    ax.legend(handles=legend_handles, frameon=False, fontsize=10,
+    ax.legend(handles=legend_handles, frameon=False, fontsize=12,
               loc="lower right", title="域名类别")
     _save(fig, out_dir, "09_top_tp_domains.png")
 
@@ -465,16 +458,16 @@ def plot_domain_presence_heatmap(df: pd.DataFrame, out_dir: str, n: int = 20) ->
     fig, ax = plt.subplots(figsize=(max(12, len(cats) * 1.2), max(7, n * 0.48)))
     im = ax.imshow(matrix, aspect="auto", cmap="YlOrRd", vmin=0, vmax=100)
     ax.set_xticks(range(len(cats)))
-    ax.set_xticklabels(zh_cats, rotation=35, ha="right", fontsize=11)
+    ax.set_xticklabels(zh_cats, rotation=35, ha="right", fontsize=13)
     ax.set_yticks(range(len(top_domains)))
-    ax.set_yticklabels(top_domains, fontsize=10)
+    ax.set_yticklabels(top_domains, fontsize=12)
     ax.set_title(f"成功率前5行业：高频第三方域名覆盖率 Top {n}")
     for di in range(len(top_domains)):
         for ci in range(len(cats)):
             v = matrix[di, ci]
             if v > 15:
                 ax.text(ci, di, f"{v:.0f}", ha="center", va="center",
-                        fontsize=9, color="black" if v < 60 else "white")
+                        fontsize=11, color="black" if v < 60 else "white")
     fig.colorbar(im, ax=ax, label="站点占比 (%)", shrink=0.6, pad=0.02)
     _save(fig, out_dir, "10_domain_presence_heatmap.png")
 
@@ -509,11 +502,11 @@ def plot_tp_count_vs_resources_bubble(df: pd.DataFrame, out_dir: str) -> None:
         ax.scatter([], [], s=sr * 300, color="#888888", alpha=0.6, label=f"脚本密度 {label}")
         for sr, label in [(0.1, "10%"), (0.5, "50%"), (1.0, "100%")]
     ]
-    leg1 = ax.legend(handles=cat_handles, frameon=False, fontsize=9,
-                     loc="upper left", title="行业分类", title_fontsize=10, ncol=2)
+    leg1 = ax.legend(handles=cat_handles, frameon=False, fontsize=11,
+                     loc="upper right", title="行业分类", title_fontsize=12, ncol=2)
     ax.add_artist(leg1)
-    ax.legend(handles=size_handles, frameon=False, fontsize=9,
-              loc="lower left", bbox_to_anchor=(0, -0.01), title="脚本密度", title_fontsize=10)
+    ax.legend(handles=size_handles, frameon=False, fontsize=11,
+              loc="lower left", bbox_to_anchor=(0, -0.01), title="脚本密度", title_fontsize=12)
     _save(fig, out_dir, "11_tp_bubble.png")
 
 
@@ -542,8 +535,8 @@ def plot_domain_ubiquity_histogram(df: pd.DataFrame, out_dir: str) -> None:
         ax.axvline(val, color=color, linestyle="--", linewidth=1.2, label=f"{label}={val:.0f}")
     single_site = (scores == 1).sum()
     ax.text(0.98, 0.95, f"{single_site / len(scores) * 100:.0f}% 的域名\n仅出现在 1 个站点",
-            transform=ax.transAxes, ha="right", va="top", fontsize=11, color="#555555")
-    ax.legend(frameon=False, fontsize=10)
+            transform=ax.transAxes, ha="right", va="top", fontsize=13, color="#555555")
+    ax.legend(frameon=False, fontsize=12)
     _save(fig, out_dir, "12_domain_ubiquity_hist.png")
 
 
@@ -566,11 +559,11 @@ def plot_https_adoption(df: pd.DataFrame, out_dir: str) -> None:
     ax.set_title("成功率前5行业：HTTPS资源采用率")
     for bar, v in zip(bars, group.values):
         ax.text(v * 100 + 1.5, bar.get_y() + bar.get_height() / 2,
-                f"{v * 100:.0f}%", va="center", fontsize=11)
+                f"{v * 100:.0f}%", va="center", fontsize=13)
     patches = [mpatches.Patch(color="#2a9d8f", label="≥ 90%"),
                mpatches.Patch(color="#f4a261", label="70–90%"),
                mpatches.Patch(color="#e63946", label="< 70%")]
-    ax.legend(handles=patches, frameon=False, fontsize=10, loc="lower right", title="安全等级")
+    ax.legend(handles=patches, frameon=False, fontsize=12, loc="lower right", title="安全等级")
     _save(fig, out_dir, "13_https_adoption.png")
 
 
@@ -598,12 +591,12 @@ def plot_privacy_risk(df: pd.DataFrame, out_dir: str) -> None:
         for j, (v, l) in enumerate(zip(vals, lefts)):
             if v > 6:
                 ax.text(l + v / 2, j, f"{v:.1f}%", ha="center", va="center",
-                        fontsize=9, color="white" if col != "cat_social" else "#444444",
+                        fontsize=11, color="white" if col != "cat_social" else "#444444",
                         fontweight="medium")
         lefts += vals
     ax.set_xlabel("隐私相关资源占比 (%)")
     ax.set_title("成功率前5行业：隐私相关资源构成")
-    ax.legend(frameon=False, fontsize=10, loc="lower right", ncol=3)
+    ax.legend(frameon=False, fontsize=12, loc="upper right", ncol=3)
     _save(fig, out_dir, "14_privacy_risk_by_industry.png")
 
 
@@ -623,10 +616,10 @@ def plot_resource_origin(df: pd.DataFrame, out_dir: str) -> None:
     ax.bar(x + width / 2, group["tp_ratio"] * 100, width,
            label="第三方", color="#e63946", edgecolor="white", linewidth=0.6)
     ax.set_xticks(x)
-    ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=11)
+    ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=13)
     ax.set_ylabel("资源占比 (%)")
     ax.set_title("成功率前5行业：第一方与第三方资源占比")
-    ax.legend(frameon=False, fontsize=11)
+    ax.legend(frameon=False, fontsize=13)
     _save(fig, out_dir, "15_resource_origin_by_industry.png")
 
 
@@ -662,11 +655,11 @@ def plot_crawl_status_breakdown(df_raw: pd.DataFrame, out_dir: str) -> None:
         for j, (v, l) in enumerate(zip(vals, lefts)):
             if v > 0:
                 ax.text(l + v / 2, j, str(int(v)), ha="center", va="center",
-                        fontsize=9, color="white", fontweight="medium")
+                        fontsize=11, color="white", fontweight="medium")
         lefts += vals
     ax.set_xlabel("站点数量")
     ax.set_title("各行业爬取结果状态分布（括号内为总爬取数）")
-    ax.legend(frameon=False, fontsize=10, loc="upper right", title="爬取状态")
+    ax.legend(frameon=False, fontsize=12, loc="upper right", title="爬取状态")
     _save(fig, out_dir, "18_crawl_status_breakdown.png")
 
 
@@ -692,12 +685,12 @@ def plot_mean_vs_median(df: pd.DataFrame, out_dir: str) -> None:
         if med_v > 0:
             ratio = mean_v / med_v
             ax.text(i, max(mean_v, med_v) * 1.04, f"×{ratio:.0f}",
-                    ha="center", fontsize=9, color="#555555")
+                    ha="center", fontsize=11, color="#555555")
     ax.set_xticks(x)
-    ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=11)
+    ax.set_xticklabels(zh_index, rotation=35, ha="right", fontsize=13)
     ax.set_ylabel("资源总数")
     ax.set_title("成功率前5行业：资源数均值与中位数")
-    ax.legend(frameon=False, fontsize=11)
+    ax.legend(frameon=False, fontsize=13)
     _save(fig, out_dir, "19_mean_vs_median.png")
 
 
